@@ -824,7 +824,7 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
         ax = self.ax
         if ax is None:
             return
-        if (event.inaxes is ax and self.toolbar._active == '' and
+        if (event.inaxes is ax and self.toolbar.mode.name == '' and
                 self.selector is not None):
             if self._lastCursor != cursors.SELECT_REGION:
                 self.toolbar.set_cursor(cursors.SELECT_REGION)
@@ -834,7 +834,7 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
         ax = self.ax
         if ax is None:
             return
-        if (event.inaxes is ax and self.toolbar._active == '' and
+        if (event.inaxes is ax and self.toolbar.mode.name == '' and
                 self.selector is not None):
             if self._lastCursor != cursors.POINTER:
                 self.toolbar.set_cursor(cursors.POINTER)
