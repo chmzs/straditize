@@ -96,11 +96,13 @@ environment::
     conda create -n straditize -c conda-forge straditize
     conda activate straditize
 
-or install it from the source files via::
-
-    git clone https://github.com/chmzs/straditize.git
+or install it from the source files via:: 
+    mamba create -n straditize python=3.7
+    mamba activate straditize
+    mamba install netcdf4 pyqt pyqtwebengine
+    git clone https://github.com/chmzs/straditize.git # 需要代理，或自行下载好，解压倒：C:\Users\用户名\
     cd straditize
-    pip install .  # or python setup.py install, but pip is recommended
+    pip install .  # or python setup.py install, but pip is recommended，需要关闭代理
 
 It can then be started from the command line via::
 
