@@ -98,7 +98,7 @@ environment::
 
 or install it from the source files via::
 
-    git clone https://github.com/Chilipp/straditize.git
+    git clone https://github.com/chmzs/straditize.git
     cd straditize
     pip install .  # or python setup.py install, but pip is recommended
 
