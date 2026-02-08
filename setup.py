@@ -21,7 +21,7 @@ class PyTest(TestCommand):
 
 
 def readme():
-    with open('README.rst') as f:
+    with open('README.rst', encoding = 'utf-8') as f:
         return f.read()
 
 
