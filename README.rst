@@ -97,6 +97,7 @@ environment::
     conda activate straditize
 
 or install it from the source files via:: 
+
     mamba create -n straditize python=3.7
     mamba activate straditize
     mamba install netcdf4 pyqt pyqtwebengine
