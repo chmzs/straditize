@@ -100,7 +100,7 @@ or install it from the source files via::
 
     mamba create -n straditize python=3.7
     mamba activate straditize
-    mamba install netcdf4 pyqt pyqtwebengine
+    mamba install netcdf4 pyqt pyqtwebengine matplotlib=3.4
     git clone https://github.com/chmzs/straditize.git # 需要代理，或自行下载好，解压倒：C:\Users\用户名\
     cd straditize
     pip install .  # or python setup.py install, but pip is recommended，需要关闭代理
@@ -108,6 +108,24 @@ or install it from the source files via::
 It can then be started from the command line via::
 
     straditize
+
+or install it from the source files via by Pixi::
+
+    # create dir
+    cd D:\Pixi_env
+    mkdir straditize
+    cd straditize
+    # 初始化 Pixi 项目
+    pixi init
+    pixi add python=3.7 netcdf4 pyqt pyqtwebengine matplotlib=3.4
+    pixi run git clone https://github.com/chmzs/straditize.git # 需要代理，或自行下载好，解压倒：D:\Pixi_env\straditize
+    cd straditize
+    pixi add pip
+    pixi run pip install . # ，需要关闭代理pi
+
+It can then be started from the command line via::
+
+pixi run straditize
 
 A more detailed description is provided in the docs_.
 
