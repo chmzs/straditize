@@ -477,18 +477,20 @@ class StraditizerWidgets(QWidget, DockMixin):
     def to_dock(self, main, *args, **kwargs):
         ret = super(StraditizerWidgets, self).to_dock(main, *args, **kwargs)
         if self.menu_actions.window_layout_action is None:
-            main.window_layouts_menu.addAction(self.window_layout_action)
             main.callbacks['straditize'] = self.open_external.emit
             main.addToolBar(self.selection_toolbar)
             self.dock.toggleViewAction().triggered.connect(
                 self.show_or_hide_toolbar)
             self.menu_actions.setup_menu_actions(main)
+            self.window_layout_action = self.menu_actions.window_layout_action
             self.menu_actions.setup_children(self.menu_actions_item)
             try:
                 main.open_file_options['Straditize project'] = \
                     self.create_straditizer_from_args
             except AttributeError:  # psyplot-gui <= 1.1.0
                 pass
+        else:
+            self.window_layout_action = self.menu_actions.window_layout_action
         return ret
 
     def show_or_hide_toolbar(self):

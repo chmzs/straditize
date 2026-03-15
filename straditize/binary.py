@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """A module to read in and digitize the pollen diagram
 
 **Disclaimer**
@@ -3795,3 +3795,4 @@ readers = {
     'rounded bars': RoundedBarDataReader,
     'line': LineDataReader,
     }
+

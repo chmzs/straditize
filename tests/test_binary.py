@@ -4,6 +4,7 @@ Test module for the :mod:`straditize.binary` module
 """
 import six
 import unittest
+import warnings
 from itertools import chain, starmap
 import numpy as np
 from straditize import binary
@@ -282,6 +283,34 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
             self.tearDown()
             self.setUp(seed=None, plot=False)
             test()
+
+    def test_set_hline_locs_from_selection_without_runtimewarning(self):
+        """Zero-valued rows should not trigger divide warnings."""
+        image = np.array([[0, 0, 0],
+                          [1, 1, 0],
+                          [0, 0, 0]], dtype=np.int8)
+        reader = binary.DataReader(image, plot=False)
+        selection = image.astype(bool)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', RuntimeWarning)
+            reader.set_hline_locs_from_selection(selection)
+
+        self.assertEqual(reader.hline_locs.tolist(), [1])
+
+    def test_set_vline_locs_from_selection_without_runtimewarning(self):
+        """Zero-valued columns should not trigger divide warnings."""
+        image = np.array([[0, 1, 0],
+                          [0, 1, 0],
+                          [0, 0, 0]], dtype=np.int8)
+        reader = binary.DataReader(image, plot=False)
+        selection = image.astype(bool)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', RuntimeWarning)
+            reader.set_vline_locs_from_selection(selection)
+
+        self.assertEqual(reader.vline_locs.tolist(), [1])
 
 
 if __name__ == '__main__':
