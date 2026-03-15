@@ -86,3 +86,6 @@ straditize-conda-*.exe
 
 # paper.pdf
 paper/paper.pdf
+
+# local git worktrees
+.worktrees/
