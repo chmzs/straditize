@@ -8,7 +8,7 @@ import six
 import tempfile
 import os.path as osp
 import unittest
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
 
 test_dir = osp.dirname(__file__)

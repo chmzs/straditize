@@ -27,7 +27,7 @@ from functools import wraps
 from itertools import chain, starmap, repeat, takewhile
 from collections import defaultdict
 import matplotlib.colors as mcol
-from straditize.common import docstrings
+from straditize.common import docstrings, nearest_index_position
 from straditize.label_selection import LabelSelection
 import xarray as xr
 from psyplot.data import safe_list
@@ -1556,8 +1556,11 @@ class DataReader(LabelSelection):
         attribute where at least 30% is selected. The digitize method will
         interpolate at these indices."""
         selection = self.selected_part if selection is None else selection
-        rows = np.where(
-            selection.sum(axis=1) / self.binary.sum(axis=1) > 0.3)[0]
+        totals = self.binary.sum(axis=1)
+        fractions = np.divide(
+            selection.sum(axis=1), totals,
+            out=np.zeros_like(totals, dtype=float), where=totals != 0)
+        rows = np.where(fractions > 0.3)[0]
         self.hline_locs = np.unique(np.r_[self.hline_locs, rows])
 
     def recognize_yaxes(self, fraction=0.3, min_lw=0, max_lw=None,
@@ -1761,8 +1764,11 @@ class DataReader(LabelSelection):
         This methods takes every pixel column in the :attr:`vline_locs`
         attribute where at least 30% is selected."""
         selection = self.selected_part if selection is None else selection
-        cols = np.where(
-            selection.sum(axis=0) / self.binary.sum(axis=0) > 0.3)[0]
+        totals = self.binary.sum(axis=0)
+        fractions = np.divide(
+            selection.sum(axis=0), totals,
+            out=np.zeros_like(totals, dtype=float), where=totals != 0)
+        cols = np.where(fractions > 0.3)[0]
         self.vline_locs = np.unique(np.r_[self.vline_locs, cols])
         self._shift_column_starts(cols)
         self._shift_occurences(cols)
@@ -2632,7 +2638,7 @@ class DataReader(LabelSelection):
                 for i, ((col, vals), (_, col_widths)) in enumerate(
                         zip(locs.items(), widths.items())):
                     locs.iloc[j-1:k, i] = vals.iloc[
-                        vals.index.get_loc(new_loc, 'nearest')]
+                        nearest_index_position(vals.index, new_loc)]
 
                     col_mask = (col_widths > 0).values
                     if col_mask.sum() > 1:

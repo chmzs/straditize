@@ -45,3 +45,18 @@ def rgba2rgb(image, color=(255, 255, 255)):
     background = Image.new('RGB', image.size, color)
     background.paste(image, mask=image.split()[3])  # 3 is the alpha channel
     return background
+
+
+def nearest_index_position(index, value):
+    """Return the integer position of the nearest numeric index entry."""
+    if not len(index):
+        raise KeyError(value)
+    position = index.get_indexer([value], method='nearest')[0]
+    if position < 0:
+        raise KeyError(value)
+    return int(position)
+
+
+def nearest_index_value(index, value):
+    """Return the nearest numeric value from a pandas-like index."""
+    return index[nearest_index_position(index, value)]
