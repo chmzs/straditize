@@ -788,6 +788,14 @@ class StraditizerMenuActions(StraditizerControlBase):
             fname = None
         return self.save_straditizer_as(fname)
 
+    def _dataset_netcdf_encoding(self, ds):
+        """Compression settings for NetCDF variables supported by netCDF4."""
+        comp = dict(zlib=True, complevel=4)
+        return {
+            name: comp.copy() for name, var in ds.data_vars.items()
+            if np.dtype(var.dtype).kind in 'biufc'
+        }
+
     def save_straditizer_as(self, fname=None):
         """Save the straditizer to a file
 
@@ -823,10 +831,7 @@ class StraditizerMenuActions(StraditizerControlBase):
             self.straditizer.save(fname)
         else:
             ds = self.straditizer.to_dataset()
-            # -- Compression with a level of 4. Requires netcdf4 engine
-            comp = dict(zlib=True, complevel=4)
-            encoding = {var: comp for var in ds.data_vars}
-
+            encoding = self._dataset_netcdf_encoding(ds)
             ds.to_netcdf(fname, encoding=encoding, engine='netcdf4')
 
     @docstrings.get_sectionsf('StraditizerMenuActions._save_image')

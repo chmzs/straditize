@@ -42,6 +42,24 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         self.assertFrameEqual(self.reader._full_df_orig,
                               old_reader._full_df_orig)
 
+    def test_netcdf_encoding_skips_string_like_variables(self):
+        """NetCDF compression should skip object and unicode variables."""
+        self.init_reader()
+        self.reader.digitize()
+        self.reader._get_sample_locs()
+        self.straditizer_widgets.refresh()
+
+        ds = self.straditizer.to_dataset()
+        encoding = self.straditizer_widgets.menu_actions._dataset_netcdf_encoding(
+            ds)
+
+        self.assertNotIn('reader_cls', encoding)
+        self.assertNotIn('reader_mod', encoding)
+        self.assertNotIn('colname', encoding)
+        self.assertEqual(encoding['reader_image']['zlib'], True)
+        self.assertEqual(encoding['reader_image']['complevel'], 4)
+        self.assertEqual(encoding['mirror_colnames']['zlib'], True)
+
     @unittest.skipIf(tesserocr is None, "requires tesserocr")
     def test_save_and_load_05_colnames(self):
         """Test the saving and loading of column names reader"""
