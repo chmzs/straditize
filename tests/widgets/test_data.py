@@ -314,6 +314,10 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
             any(issubclass(w.category, FutureWarning) for w in caught),
             msg=[str(w.message) for w in caught])
 
+    def test_find_samples_method_selector_hidden_for_non_stacked_reader(self):
+        self.init_reader()
+        self.assertTrue(self.digitizer.sample_method_child.isHidden())
+
     def test_plot_results(self):
         """Test the plotting of the results"""
         sw = self.straditizer_widgets

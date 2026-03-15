@@ -788,7 +788,8 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
             self._action_clicked = next(key for key, a in self._actions.items()
                                         if a.isChecked())
 
-        self.toolbar.set_message(self.toolbar.mode)
+        if self.toolbar is not None:
+            self.toolbar.set_message(self.toolbar.mode)
 
     def enable_or_disable_widgets(self, b):
         super(SelectionToolbar, self).enable_or_disable_widgets(b)

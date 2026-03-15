@@ -79,6 +79,66 @@ class StackedAreaReaderTest(bt.StraditizeWidgetsTestCase):
         # end digitizing
         QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
 
+    def test_find_samples_method_selector_visible(self):
+        self.init_reader()
+        self.assertFalse(self.digitizer.sample_method_child.isHidden())
+
+    def test_find_samples_uses_standard_mode_by_default(self):
+        self.test_digitize()
+        calls = []
+        samples = pd.DataFrame([[1.0, 2.0, 3.0]], index=[10],
+                               columns=self.reader.full_df.columns)
+        rough = pd.DataFrame(
+            [[9, 11, 9, 11, 9, 11]],
+            index=[10],
+            columns=pd.MultiIndex.from_product(
+                [self.reader.full_df.columns, ['vmin', 'vmax']]))
+
+        def fake_find_samples(**kwargs):
+            calls.append(kwargs)
+            return samples.copy(), rough.copy()
+
+        def fail_consensus(*args, **kwargs):
+            raise AssertionError('consensus finder should not be used')
+
+        self.reader.find_samples = fake_find_samples
+        self.reader.find_consensus_samples = fail_consensus
+
+        QTest.mouseClick(self.digitizer.btn_find_samples, Qt.LeftButton)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['pixel_tol'], self.digitizer.sp_pixel_tol.value())
+        self.assertFrameEqual(self.reader.sample_locs, samples)
+
+    def test_find_samples_can_use_consensus_mode(self):
+        self.test_digitize()
+        self.digitizer.cb_find_samples_method.setCurrentText(
+            'Consensus interpolation')
+        calls = []
+        samples = pd.DataFrame([[1.5, 2.5, 3.5]], index=[10.5],
+                               columns=self.reader.full_df.columns)
+        rough = pd.DataFrame(
+            [[9, 11, 9, 11, 9, 11]],
+            index=[10.5],
+            columns=pd.MultiIndex.from_product(
+                [self.reader.full_df.columns, ['vmin', 'vmax']]))
+
+        def fail_standard(*args, **kwargs):
+            raise AssertionError('standard finder should not be used')
+
+        def fake_consensus(**kwargs):
+            calls.append(kwargs)
+            return samples.copy(), rough.copy()
+
+        self.reader.find_samples = fail_standard
+        self.reader.find_consensus_samples = fake_consensus
+
+        QTest.mouseClick(self.digitizer.btn_find_samples, Qt.LeftButton)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['pixel_tol'], self.digitizer.sp_pixel_tol.value())
+        self.assertFrameEqual(self.reader.sample_locs, samples)
+
     def test_edit_col(self):
         """Test the editing of a column"""
         self.test_digitize()
