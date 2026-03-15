@@ -1,6 +1,7 @@
 """Test the straditize.widgets.data module"""
 import numpy as np
 import pandas as pd
+import warnings
 from itertools import chain
 from straditize import binary
 import os.path as osp
@@ -301,6 +302,17 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
         self.digitizer.load_samples(fname)
         self.assertFrameEqual(ref, self.reader.sample_locs,
                               check_names=False)
+
+    def test_load_samples_without_futurewarning(self):
+        """Loading samples should not rely on deprecated pandas indexing."""
+        self.test_digitize()
+        fname = self.get_fig_path(osp.join('data', 'data.csv'))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always', FutureWarning)
+            self.digitizer.load_samples(fname)
+        self.assertFalse(
+            any(issubclass(w.category, FutureWarning) for w in caught),
+            msg=[str(w.message) for w in caught])
 
     def test_plot_results(self):
         """Test the plotting of the results"""

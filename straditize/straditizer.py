@@ -175,7 +175,12 @@ def _new_mark_factory(marks, mark_added, func, fig, axes=None,
                 event.inaxes not in axes or
                 get_toolbar_mode(fig) != ''):
             return
-        new_marks = _new_mark(event.xdata, event.ydata)
+        try:
+            new_marks = _new_mark(event.xdata, event.ydata)
+        except ValueError as exc:
+            if str(exc) != "Cannot use more than 2 marks!":
+                raise
+            return
         for m in new_marks or []:
             mark_added.emit(m)
 

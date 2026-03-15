@@ -2725,6 +2725,7 @@ class DataReader(LabelSelection):
             missing = df.index[~df.index.isin(self._rough_locs.index)]
         # add missing samples
         if len(missing):
+            missing = np.asarray(missing)
             rough = np.tile(missing[:, np.newaxis], (1, len(df.columns) * 2))
             rough[:, 1::2] += 1
             new = pd.DataFrame(
