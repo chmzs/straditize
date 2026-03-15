@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>."""
 from itertools import chain
 import numpy as np
+import pandas as pd
 from functools import partial
 from straditize.binary import DataReader, readers
 from straditize.widgets import StraditizerControlBase, get_straditizer_widgets
@@ -348,6 +349,91 @@ class StackedReader(DataReader, StraditizerControlBase):
                     np.where(mask, np.nan, arr)[imin:imax] + x[imin:imax],
                     y[imin:imax], **plot_kws))
             x += arr
+
+    def interpolate_samples(self, sample_rows):
+        """Linearly interpolate the digitized stacked curves at sample rows."""
+        full_df = self.full_df
+        sample_rows = np.asarray(sample_rows, dtype=float)
+        index = np.asarray(full_df.index, dtype=float)
+        sample_index = pd.Index(sample_rows, name=full_df.index.name)
+        values = np.column_stack([
+            np.interp(sample_rows, index, full_df.loc[:, col].values)
+            for col in full_df.columns])
+        return pd.DataFrame(values, index=sample_index, columns=full_df.columns)
+
+    def _consensus_sample_rows(self, bars):
+        """Estimate a shared y-axis for stacked samples from interval votes."""
+        index = np.asarray(self.full_df.index, dtype=float)
+        columns = list(self.full_df.columns)
+        col_map = dict(zip(columns, range(len(columns))))
+        rows = np.zeros(len(bars), dtype=float)
+        rough = -np.ones((len(bars), len(columns) * 2), dtype=float)
+        for i, bar in enumerate(bars):
+            votes = np.zeros(len(index), dtype=float)
+            for col, (imin, imax) in bar.items():
+                imin = max(int(imin), 0)
+                imax = min(int(imax), len(index))
+                rough[i, 2 * col_map[col]:2 * col_map[col] + 2] = [imin, imax]
+                if imin >= imax:
+                    votes[min(imin, len(votes) - 1)] += 1.0
+                    continue
+                votes[imin:imax] += 1.0 / max(imax - imin, 1)
+            if votes.any():
+                winners = np.flatnonzero(votes == votes.max())
+                rows[i] = index[winners].mean()
+            else:
+                centers = []
+                for imin, imax in bar.values():
+                    imin = max(int(imin), 0)
+                    imax = min(int(imax), len(index))
+                    if imin >= imax:
+                        centers.append(index[min(imin, len(index) - 1)])
+                    else:
+                        centers.append(index[imin:imax].mean())
+                rows[i] = np.mean(centers) if centers else np.nan
+        return rows, rough
+
+    def _merge_consensus_occurences(self, locs):
+        for col, occs in self.occurences_dict.items():
+            closest = np.abs(
+                locs.index.values[np.newaxis] -
+                occs[:, np.newaxis]).argmin(axis=1)
+            locs.loc[locs.index[closest], col] = self.occurences_value
+
+    def find_consensus_samples(self, min_fract=None, pixel_tol=5,
+                               *args, **kwargs):
+        """Prototype sample finder using global y-consensus and interpolation.
+
+        Unlike :meth:`find_samples`, this method first estimates one shared
+        sample y-position per horizon and only then interpolates each stacked
+        curve on that shared axis.
+        """
+        bars = self.unique_bars(min_fract, asdict=True, *args, **kwargs)
+        full_df = self.full_df
+        columns = list(full_df.columns)
+        rough_columns = pd.MultiIndex.from_product([columns, ['vmin', 'vmax']])
+        if not bars:
+            empty_index = pd.Index([], dtype=float, name=full_df.index.name)
+            return (pd.DataFrame([], index=empty_index, columns=columns),
+                    pd.DataFrame([], index=empty_index, columns=rough_columns))
+
+        rows, rough = self._consensus_sample_rows(bars)
+        samples = self.interpolate_samples(rows)
+        rough = pd.DataFrame(
+            rough, index=pd.Index(rows, name=full_df.index.name),
+            columns=rough_columns)
+
+        not_duplicated = ~samples.index.duplicated()
+        samples = samples.iloc[not_duplicated].sort_index()
+        rough = rough.iloc[not_duplicated].sort_index()
+
+        if pixel_tol is not None and len(samples):
+            samples, rough = self.merge_close_samples(samples, rough, pixel_tol)
+            samples = self.interpolate_samples(samples.index.values)
+            rough.index = samples.index
+
+        self._merge_consensus_occurences(samples)
+        return samples, rough
 
     def resize_axes(self, grouper, bounds):
         """Reimplemented to do nothing"""
