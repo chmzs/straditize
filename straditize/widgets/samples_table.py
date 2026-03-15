@@ -1025,9 +1025,11 @@ class MultiCrossMarksEditor(DockMixin, QWidget):
             del self._fit2selection_cid
 
     def _fit2selection(self, event):
+        from straditize.straditizer import get_toolbar_mode
+
         model = self.table.model()
         if (not event.inaxes or event.button != 1 or
-                model.fig.canvas.manager.toolbar.mode != ''):
+                get_toolbar_mode(model.fig) != ''):
             return
         y = int(np.round(event.ydata))
         data = self.table.full_df.loc[y]
@@ -1117,9 +1119,11 @@ class SingleCrossMarksEditor(MultiCrossMarksEditor):
         self.straditizer().update_samples(remove=False)
 
     def _fit2selection(self, event):
+        from straditize.straditizer import get_toolbar_mode
+
         model = self.table.model()
         if (not event.inaxes or event.button != 1 or
-                model.fig.canvas.manager.toolbar.mode != ''):
+                get_toolbar_mode(model.fig) != ''):
             return
         y = int(np.round(event.ydata)) - model._y0
         data = self.table.full_df.loc[y]
