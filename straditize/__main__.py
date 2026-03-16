@@ -25,6 +25,7 @@ import os.path as osp
 from straditize.common import (
     ensure_asyncio_event_loop,
     patch_psyplot_gui_asyncio,
+    patch_psyplot_gui_backend,
     patch_psyplot_gui_entrypoints,
 )
 
@@ -70,6 +71,7 @@ def start_app(fname=None, output=None, xlim=None, ylim=None,
         from psyplot_gui import start_app, send_files_to_psyplot
         exec_ = kwargs.pop('exec_', True)
         patch_psyplot_gui_asyncio()
+        patch_psyplot_gui_backend()
         patch_psyplot_gui_entrypoints()
         ensure_asyncio_event_loop()
         if exec_:

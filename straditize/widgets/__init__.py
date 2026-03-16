@@ -32,7 +32,10 @@ from psyplot_gui.common import (
     DockMixin, get_icon as get_psy_icon, PyErrorMessage)
 import numpy as np
 import glob
-from straditize.common import docstrings
+from straditize.common import docstrings, patch_psyplot_gui_backend
+
+
+patch_psyplot_gui_backend()
 
 
 if with_qt5:

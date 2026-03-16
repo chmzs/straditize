@@ -7,6 +7,7 @@ import pandas as pd
 
 from straditize.common import (
     ensure_asyncio_event_loop,
+    ensure_toolbar_message_signal,
     nearest_index_position,
     nearest_index_value,
 )
@@ -39,6 +40,25 @@ class CommonHelpersTest(unittest.TestCase):
         get_loop.assert_called_once_with()
         new_event_loop.assert_called_once_with()
         set_event_loop.assert_called_once_with(sentinel)
+
+    def test_ensure_toolbar_message_signal_wraps_set_message(self):
+        class Toolbar(object):
+            def __init__(self):
+                self.messages = []
+
+            def set_message(self, text):
+                self.messages.append(text)
+
+        toolbar = Toolbar()
+        signal = ensure_toolbar_message_signal(toolbar)
+        received = []
+
+        signal.connect(received.append)
+        toolbar.set_message('hello')
+
+        self.assertIs(signal, toolbar.message)
+        self.assertEqual(toolbar.messages, ['hello'])
+        self.assertEqual(received, ['hello'])
 
 
 if __name__ == '__main__':

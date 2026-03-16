@@ -12,6 +12,7 @@ from pandas.testing import assert_frame_equal
 from straditize.common import (
     ensure_asyncio_event_loop,
     patch_psyplot_gui_asyncio,
+    patch_psyplot_gui_backend,
     patch_psyplot_gui_entrypoints,
 )
 
@@ -81,6 +82,7 @@ class StraditizeWidgetsTestCase(unittest.TestCase):
             import psyplot_gui
             psyplot_gui.UNIT_TESTING = True
             patch_psyplot_gui_asyncio()
+            patch_psyplot_gui_backend()
             patch_psyplot_gui_entrypoints()
             ensure_asyncio_event_loop()
             cls.window = main.MainWindow.run(show=False)

@@ -81,6 +81,63 @@ def ensure_asyncio_event_loop():
         return loop
 
 
+class _ToolbarMessageSignal(object):
+    """Small signal-like adapter for modern matplotlib toolbars."""
+
+    def __init__(self):
+        self._callbacks = []
+
+    def connect(self, callback):
+        self._callbacks.append(callback)
+
+    def emit(self, text):
+        for callback in list(self._callbacks):
+            callback(text)
+
+
+class _ToolbarMessageDescriptor(object):
+    """Descriptor that recreates the removed toolbar ``message`` signal."""
+
+    def __get__(self, toolbar, owner):
+        if toolbar is None:
+            return self
+        return ensure_toolbar_message_signal(toolbar)
+
+
+def ensure_toolbar_message_signal(toolbar):
+    """Provide a ``message.connect(...)`` API for newer Qt toolbars.
+
+    Matplotlib 3.10 dropped the ``NavigationToolbar2QT.message`` signal that
+    older psyplot-gui releases still connect to. Newer toolbars only expose a
+    ``set_message`` method, so we mirror that into a tiny signal adapter.
+    """
+    if toolbar is None:
+        return None
+    signal = getattr(toolbar, '_straditize_message_signal', None)
+    if signal is not None:
+        return signal
+    descriptor = getattr(type(toolbar), 'message', None)
+    if (descriptor is not None and
+            not isinstance(descriptor, _ToolbarMessageDescriptor)):
+        return toolbar.message
+    if not hasattr(toolbar, 'set_message'):
+        return None
+
+    signal = _ToolbarMessageSignal()
+    original = toolbar.set_message
+
+    @wraps(original)
+    def wrapped(text):
+        ret = original(text)
+        signal.emit(text)
+        return ret
+
+    toolbar.set_message = wrapped
+    toolbar._straditize_message_signal = signal
+    toolbar.message = signal
+    return signal
+
+
 def patch_psyplot_gui_asyncio():
     """Patch psyplot-gui's console startup for Python 3.14+ on Windows.
 
@@ -105,6 +162,24 @@ def patch_psyplot_gui_asyncio():
 
     wrapped._straditize_patched = True
     console.init_asyncio_patch = wrapped
+    return True
+
+
+def patch_psyplot_gui_backend():
+    """Patch psyplot-gui's Qt backend for Matplotlib 3.10 toolbars."""
+    try:
+        import psyplot_gui.backend as backend
+    except ImportError:
+        return False
+
+    try:
+        toolbar_cls = backend.FigureManagerQT._toolbar2_class
+    except AttributeError:
+        return False
+    if hasattr(toolbar_cls, 'message'):
+        return True
+
+    toolbar_cls.message = _ToolbarMessageDescriptor()
     return True
 
 
