@@ -2,10 +2,6 @@
 Digitizing stratigraphic diagrams
 =================================
 
-.. image:: http://unmaintained.tech/badge.svg
-    :target: http://unmaintained.tech/
-    :alt: No Maintenance Intended
-
 .. start-badges
 
 .. list-table::
@@ -63,7 +59,9 @@ Digitizing stratigraphic diagrams
 
 .. end-badges
 
-**This module is not maintained!!!**
+This refreshed ``0.2`` release focuses on reliable digitization on modern
+Python, pandas and matplotlib stacks while preserving the original
+stratigraphic workflow.
 
 STRADITIZE (Stratigraphic Diagram Digitizer) is an open-source program that
 allows stratigraphic figures to be digitized in a single semi-automated
@@ -72,7 +70,7 @@ the same vertical axis, whether this is a sediment core or any similar
 depth/time series.
 
 Usually, in an age of digital data analysis, gaining access to data from the
-pre-digital era – or any data that is only available as a figure on a page –
+pre-digital era, or any data that is only available as a figure on a page,
 remains a problem and an under-utilized scientific resource.
 
 This program tackles this problem by providing a python package to digitize
@@ -88,30 +86,64 @@ variables, the automatic and semi-automatic recognition of picture artifacts,
 as well an automatic measurement finder to exactly reproduce the data that has
 been used to create the diagram.
 
+Highlights in 0.2
+-----------------
+
+* Modernized runtime compatibility for Python 3.10-3.14, pandas 2.3-3.0 and
+  current matplotlib / psyplot-gui stacks.
+* Improved result review by overlaying digitized output on the source image
+  with exportable comparison data.
+* Better stacked-area sample inference via consensus interpolation.
+* Restored modern Excel / NetCDF export paths and several headless Qt fixes.
+
 Installation
 ------------
-We highly recommend to use anaconda_ and install straditize into its own
-environment::
 
-    conda create -n straditize -c conda-forge straditize
-    conda activate straditize
+We recommend installing straditize into its own isolated environment. The most
+reliable path for ``0.2`` is to install from a source checkout so the tested
+dependency stack is explicit.
 
-or install it from the source files via:: 
+Recommended source install with ``pixi``::
 
-    mamba create -n straditize python=3.7
-    mamba activate straditize
-    mamba install netcdf4 pyqt pyqtwebengine
-    git clone https://github.com/chmzs/straditize.git # 需要代理，或自行下载好，解压倒：C:\Users\用户名\
+    git clone https://github.com/Chilipp/straditize.git
     cd straditize
-    pip install .  # or python setup.py install, but pip is recommended，需要关闭代理
+    pixi init
+    pixi add python=3.12 "numpy>=1.26" "pandas>=2.3" "matplotlib>=3.8" "scipy>=1.13" "xarray>=2024.7" "psyplot=1.5.1" "psyplot-gui=1.5.0" "pyqt=5.15" pyqtwebengine netcdf4 openpyxl scikit-image pillow
+    pixi run pip install -e .
+    pixi run straditize
+
+Recommended source install with ``mamba``/``conda``::
+
+    git clone https://github.com/Chilipp/straditize.git
+    cd straditize
+    mamba create -n straditize python=3.12 "numpy>=1.26" "pandas>=2.3" "matplotlib>=3.8" "scipy>=1.13" "xarray>=2024.7" "psyplot=1.5.1" "psyplot-gui=1.5.0" "pyqt=5.15" pyqtwebengine netcdf4 openpyxl scikit-image pillow pip
+    mamba activate straditize
+    pip install -e .
 
 It can then be started from the command line via::
 
     straditize
 
+Validated dependency stack
+--------------------------
+
+The ``0.2`` update has been verified with:
+
+* Python 3.10 to 3.14
+* NumPy >= 1.26
+* pandas 2.3 to 3.0
+* matplotlib 3.8 to 3.10
+* SciPy >= 1.13
+* xarray >= 2024.7
+* psyplot 1.5.1
+* psyplot-gui 1.5.0
+* PyQt5 5.15
+
+Older environments may still work, but the configurations above are the ones
+that were exercised during this release refresh.
+
 A more detailed description is provided in the docs_.
 
-.. _anaconda: https://conda.io/en/latest/miniconda.html
 .. _docs: https://straditize.readthedocs.io/en/latest/installing.html
 
 License
