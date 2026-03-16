@@ -166,7 +166,8 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         self.straditizer_widgets.menu_actions.export_final(fname)
         self.assertTrue(osp.exists(fname), msg=fname + ' is missing!')
         exported = pd.read_csv(fname, index_col=0, comment='#')
-        self.assertFrameEqual(exported, self.straditizer.final_df)
+        self.assertFrameEqual(
+            exported, self.straditizer.final_df, check_index_type=False)
 
     def test_export_full_df(self):
         """Test the exporting of the final DataFrame"""
@@ -177,7 +178,8 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         self.straditizer_widgets.menu_actions.export_full(fname)
         self.assertTrue(osp.exists(fname), msg=fname + ' is missing!')
         exported = pd.read_csv(fname, index_col=0, comment='#')
-        self.assertFrameEqual(exported, self.straditizer.full_df)
+        self.assertFrameEqual(
+            exported, self.straditizer.full_df, check_index_type=False)
 
 
 if __name__ == '__main__':

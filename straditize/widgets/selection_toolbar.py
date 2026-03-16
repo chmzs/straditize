@@ -21,6 +21,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>."""
 from itertools import chain
+import inspect
 import six
 import numpy as np
 from straditize.widgets import get_icon, StraditizerControlBase, InfoButton
@@ -42,6 +43,21 @@ class PointOrRectangleSelector(mwid.RectangleSelector):
 
     This class reimplements the :class:`matplotlib.widgets.RectangleSelector`
     to select points"""
+
+    _rectangle_selector_params = set(
+        inspect.signature(mwid.RectangleSelector).parameters)
+
+    def __init__(self, ax, onselect, **kwargs):
+        if ('props' in self._rectangle_selector_params and
+                'rectprops' in kwargs and 'props' not in kwargs):
+            props = dict(kwargs.pop('rectprops'))
+            lineprops = kwargs.pop('lineprops', None) or {}
+            lineprops = dict(lineprops)
+            if 'c' in lineprops and 'edgecolor' not in props:
+                props['edgecolor'] = lineprops.pop('c')
+            props.update(lineprops)
+            kwargs['props'] = props
+        super(PointOrRectangleSelector, self).__init__(ax, onselect, **kwargs)
 
     def press(self, *args, **kwargs):
         ret = super(PointOrRectangleSelector, self).press(*args, **kwargs)

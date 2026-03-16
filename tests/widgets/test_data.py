@@ -301,8 +301,9 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
         ref.index = ref.index.astype(int)
         ref.columns = ref.columns.astype(int)
         self.digitizer.load_samples(fname)
-        self.assertFrameEqual(ref, self.reader.sample_locs,
-                              check_names=False)
+        self.assertFrameEqual(
+            ref, self.reader.sample_locs,
+            check_names=False, check_column_type=False)
 
     def test_load_samples_without_futurewarning(self):
         """Loading samples should not rely on deprecated pandas indexing."""

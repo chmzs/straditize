@@ -251,7 +251,7 @@ class StackedReader(DataReader, StraditizerControlBase):
     def add_col(self):
         """Create a column out of the current selection"""
         def increase_col_nums(df):
-            df_cols = df.columns.values
+            df_cols = np.asarray(df.columns, dtype=int).copy()
             df_cols[df_cols >= current] += 1
             df.columns = df_cols
         current = self._current_col

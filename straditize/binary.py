@@ -159,8 +159,9 @@ class DataReader(LabelSelection):
         if self.parent._sample_locs is not None:
             return self.parent._sample_locs
         elif self.parent._full_df is not None:
-            self.parent._sample_locs = pd.DataFrame(
-                [], columns=list(self.parent._full_df.columns))
+            empty = self.parent._full_df.iloc[0:0].copy()
+            empty.index = pd.Index([], name='sample')
+            self.parent._sample_locs = empty
             return self.parent._sample_locs
 
     @sample_locs.setter
@@ -993,7 +994,9 @@ class DataReader(LabelSelection):
             if 'column_ends' in ds:
                 reader._column_ends = ds['column_ends'].values
             if 'full_data' in ds:
-                reader._full_df = pd.DataFrame(ds['full_data'].values)
+                reader._full_df = pd.DataFrame(
+                    ds['full_data'].values,
+                    index=np.arange(ds['full_data'].shape[0]))
             if 'hline' in ds:
                 reader.hline_locs = ds['hline'].values
             if 'vline' in ds:
@@ -2703,8 +2706,9 @@ class DataReader(LabelSelection):
         samples, rough_locs, find_samples, sample_locs
         """
         if self.sample_locs is None:
-            self.sample_locs = pd.DataFrame([], index='sample',
-                                            columns=self._full_df.columns)
+            empty = self._full_df.iloc[0:0].copy()
+            empty.index = pd.Index([], name='sample')
+            self.sample_locs = empty
         if samples.ndim == 2:
             self._add_samples_from_df(samples)
         else:
@@ -3474,7 +3478,9 @@ class BarDataReader(DataReader):
             ret.max_len = ds[v('max_len')].values
         if v('full_data_orig') in ds:
             ret._full_df_orig = pd.DataFrame(
-                ds[v('full_data_orig')].values, columns=ds[v('column')].values)
+                ds[v('full_data_orig')].values,
+                columns=ds[v('column')].values,
+                index=np.arange(ds[v('full_data_orig')].shape[0]))
 
         return ret
 

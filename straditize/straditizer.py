@@ -1434,7 +1434,7 @@ class Straditizer(LabelSelection):
             fig.delaxes(ax)
         axes = axes.ravel()[:len(df.columns) + 1]
         idx_v = self.indexes['y'][:full_df.shape[0]]
-        for (col, s), ax in zip(full_df.iteritems(), axes):
+        for (col, s), ax in zip(full_df.items(), axes):
             if col != 'nextrema':
                 ax.imshow(get_child(col).get_binary_for_col(col),
                           cmap='binary')
