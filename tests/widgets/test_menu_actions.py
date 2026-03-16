@@ -4,8 +4,10 @@ import pandas as pd
 import os.path as osp
 import _base_testing as bt
 import unittest
+from unittest import mock
 from psyplot_gui.compat.qtcompat import QTest, Qt
 from straditize.colnames import tesserocr
+from straditize.widgets.menu_actions import ExportDfDialog
 
 
 class MenuActionsTest(bt.StraditizeWidgetsTestCase):
@@ -180,6 +182,19 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         exported = pd.read_csv(fname, index_col=0, comment='#')
         self.assertFrameEqual(
             exported, self.straditizer.full_df, check_index_type=False)
+
+    def test_export_dialog_handles_qt_resize_with_integer_sizes(self):
+        """The export dialog should not pass float sizes to Qt resize."""
+        self.init_reader()
+
+        with mock.patch.object(
+                ExportDfDialog, 'exec_', autospec=True) as exec_:
+            dialog = ExportDfDialog.export_df(
+                self.straditizer_widgets, self.straditizer.full_df,
+                self.straditizer, exec_=False)
+
+        self.assertIsInstance(dialog, ExportDfDialog)
+        self.assertFalse(exec_.called)
 
 
 if __name__ == '__main__':

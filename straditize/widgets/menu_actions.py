@@ -175,7 +175,7 @@ class ExportDfDialog(QDialog):
             height = dialog.sizeHint().height()
             # The plot creator window should cover at least one third of the
             # screen
-            dialog.resize(max(available_width, width), height)
+            dialog.resize(int(max(available_width, width)), int(height))
             if exec_:
                 dialog.exec_()
             else:
