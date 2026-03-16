@@ -183,7 +183,7 @@ class StackedReader(DataReader, StraditizerControlBase):
             axis=1)
         x = np.meshgrid(*map(np.arange, image.shape[::-1]))[0]
         image[(x < start[:, np.newaxis]) | (x > all_end[:, np.newaxis])] = 0
-        labels = skim.label(image, 8)
+        labels = skim.label(image, connectivity=2)
         self.straditizer_widgets.selection_toolbar.data_obj = self
         self.apply_button.clicked.connect(
             self.add_col if add_on_apply else self.update_col)

@@ -1116,7 +1116,7 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
                         axis=-1)] = True
         if not self.cb_whole_fig.isChecked():
             import skimage.morphology as skim
-            all_labels = skim.label(mask, 8, return_num=False)
+            all_labels = skim.label(mask, connectivity=2, return_num=False)
             selected_labels = np.unique(all_labels[sly, slx])
             mask[~np.isin(all_labels, selected_labels)] = False
         if self.remove_select_action.isChecked():

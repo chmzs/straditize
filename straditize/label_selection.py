@@ -203,7 +203,8 @@ class LabelSelection(object):
         arr &= ~skim.remove_small_objects(arr, n)
         if not arr.any():
             return
-        labeled, num_labels = skim.label(arr, 8, return_num=True)
+        labeled, num_labels = skim.label(
+            arr, connectivity=2, return_num=True)
         min_height = np.ceil(0.05 * arr.shape[0])
         min_width = np.ceil(0.05 * arr.shape[1])
         self._ellipses = artists = []

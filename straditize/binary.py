@@ -572,7 +572,8 @@ class DataReader(LabelSelection):
         """Create a connectivity-based labeled array of the :attr:`binary` data
         """
         return np.where(
-            self.binary, skim.label(self.binary, 8, return_num=False), 0
+            self.binary, skim.label(
+                self.binary, connectivity=2, return_num=False), 0
         )
 
     def update_image(self, arr, amask):
@@ -1449,7 +1450,7 @@ class DataReader(LabelSelection):
             selection = self._filter_lines(rows, min_lw, max_lw)
             mask[selection] = True
         if mask.any():
-            labeled = skim.label(arr, 8)
+            labeled = skim.label(arr, connectivity=2)
             labels = np.unique(labeled[mask])
             labels = labels[labels > 0]
             labeled[mask] = 0
@@ -1477,7 +1478,7 @@ class DataReader(LabelSelection):
             selection = self._filter_lines(rows, min_lw, max_lw)
             mask[selection] = True
         if mask.any():
-            labeled = skim.label(arr, 8)
+            labeled = skim.label(arr, connectivity=2)
             labels = np.unique(labeled[mask])
             labels = labels[labels > 0]
             labeled[mask] = 0
@@ -1813,7 +1814,7 @@ class DataReader(LabelSelection):
             shape = binary.shape
             bins = np.r_[0, np.arange(1, 260 + categorize, categorize)]
             binary = pd.cut(binary.ravel(), bins, labels=False).reshape(shape)
-        return skim.label(binary, 8, return_num=False)
+        return skim.label(binary, connectivity=2, return_num=False)
 
     def image_array(self):
         """The RGBA values of the colored image"""
@@ -2425,7 +2426,7 @@ class DataReader(LabelSelection):
     def get_occurences(self):
         """Extract the positions of the occurences from the selection"""
         selected = self.selected_part
-        labeled, num = skim.label(selected, 8, return_num=True)
+        labeled, num = skim.label(selected, connectivity=2, return_num=True)
         if self._column_starts is None:
             bounds = []
         else:
@@ -2889,7 +2890,8 @@ class DataReader(LabelSelection):
                 self.magni_plot_im.set_array(self.labels)
         else:
             kwargs.setdefault('zorder', self.plot_im.zorder + 0.1)
-            labels, num_labels = skim.label(arr, 8, return_num=True)
+            labels, num_labels = skim.label(
+                arr, connectivity=2, return_num=True)
             self.enable_label_selection(labels, num_labels, **kwargs)
             if select_all:
                 self.select_all_labels()
@@ -2939,7 +2941,7 @@ class DataReader(LabelSelection):
             The labeled binary image with the same shape as the
             :attr:`label` data"""
         binary = self.merged_binaries()
-        return skim.label(binary, 8, return_num=False)
+        return skim.label(binary, connectivity=2, return_num=False)
 
     @only_parent
     @docstrings.get_sectionsf('DataReader.get_cross_column_features')
@@ -3089,9 +3091,14 @@ class DataReader(LabelSelection):
         import matplotlib.pyplot as plt
         import matplotlib.transforms as mt
         import psyplot.project as psy
+        from straditize.straditizer import (
+            create_matplotlib_figure, should_use_headless_figure)
+
+        headless = should_use_headless_figure()
 
         if ax is None:
-            fig = fig or plt.figure()
+            if fig is None:
+                fig = create_matplotlib_figure(headless=headless)
             bbox = mt.Bbox.from_extents(
                 mpl.rcParams['figure.subplot.left'],
                 mpl.rcParams['figure.subplot.bottom'],
@@ -3102,7 +3109,9 @@ class DataReader(LabelSelection):
             fig = ax.figure
         else:  # the bbox is given
             bbox = ax
-            fig = fig or plt.gcf()
+            if fig is None:
+                fig = (create_matplotlib_figure(headless=True) if headless
+                       else plt.gcf())
         x0 = bbox.x0
         y0 = bbox.y0
         height = bbox.height
@@ -3143,8 +3152,10 @@ class DataReader(LabelSelection):
                 if ax_bbox.x1 != x1:
                     d['right'] = ':'
                 p.update(axislinestyle=d, draw=False)
-        psy.scp(sp.main)
-        psy.scp(sp)
+        if (not headless and
+                getattr(getattr(fig, 'canvas', None), 'manager', None) is not None):
+            psy.scp(sp.main)
+            psy.scp(sp)
         if df.index[0] < df.index[-1]:
             ax0.invert_yaxis()
         return sp, groupers
@@ -3223,6 +3234,13 @@ class DataReader(LabelSelection):
         -------
         psy_strat.stratplot.StratGroup
             The grouper that visualizes the given `columns` in the `fig`"""
+        import psyplot.utils as psy_utils
+        # Older psy_strat releases still import DefaultOrderedDict from
+        # psyplot.utils. Newer psyplot exposes the same behavior as
+        # Defaultdict, so provide the legacy alias before importing psy_strat.
+        if (not hasattr(psy_utils, 'DefaultOrderedDict') and
+                hasattr(psy_utils, 'Defaultdict')):
+            psy_utils.DefaultOrderedDict = psy_utils.Defaultdict
         from psy_strat.stratplot import strat_groupers
         import psyplot.project as psy
         mp = psy.gcp(True)

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from itertools import chain
+from unittest import mock
 from straditize import binary
 import os.path as osp
 import _base_testing as bt
@@ -604,6 +605,34 @@ class BarReaderTest(bt.StraditizeWidgetsTestCase):
             self.assertEqual(len(set(indices)), len(indices))
             # check that the bars are valid
             self.assertLessEqual(set(indices), ref_bars)
+
+    def test_split_bars_uses_headless_figure_helper(self):
+        """Bar split suggestions should avoid GUI pyplot figures."""
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        self.test_digitize()
+        self.assertTrue(any(self.reader._splitted.values()))
+
+        tree = self.digitizer.tree_bar_split
+        item = tree.topLevelItem(0).child(0)
+        fig = Figure()
+        FigureCanvasAgg(fig)
+
+        with mock.patch(
+                'straditize.widgets.data.should_use_headless_figure',
+                return_value=True), \
+                mock.patch(
+                    'straditize.widgets.data.create_matplotlib_figure',
+                    return_value=fig) as create_fig, \
+                mock.patch(
+                    'matplotlib.pyplot.figure',
+                    side_effect=AssertionError(
+                        'pyplot.figure should not be used')):
+            tree.start_splitting(item)
+
+        create_fig.assert_called_once_with(headless=True)
+        self.assertIs(tree.suggestions_fig, fig)
 
 
 if __name__ == '__main__':

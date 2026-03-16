@@ -3,9 +3,11 @@
 Test module for the :mod:`straditize.binary` module
 """
 import six
+import types
 import unittest
 import warnings
 from itertools import chain, starmap
+from unittest import mock
 import numpy as np
 from straditize import binary
 import pandas as pd
@@ -311,6 +313,70 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
             reader.set_vline_locs_from_selection(selection)
 
         self.assertEqual(reader.vline_locs.tolist(), [1])
+
+    def test_plot_results_uses_headless_figure_helper(self):
+        """Headless plot rendering should avoid pyplot figure managers."""
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        class _BlockSignals(object):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class _FakeProject(object):
+            def __init__(self, axis):
+                self._array = types.SimpleNamespace(
+                    psy=types.SimpleNamespace(update=mock.Mock()))
+                self.axes = {
+                    axis: types.SimpleNamespace(update=mock.Mock())}
+                self.main = object()
+
+            def __getitem__(self, key):
+                return self._array
+
+        reader = binary.DataReader(np.array([[1, 0], [0, 1]], dtype=np.int8),
+                                   plot=False)
+        reader.all_column_starts = np.array([0])
+        reader.all_column_ends = np.array([2])
+        reader.columns = [0]
+        df = pd.DataFrame({0: [0.25, 0.75]}, index=[0, 1])
+
+        fig = Figure()
+        FigureCanvasAgg(fig)
+        axis = fig.subplots()
+        grouper = types.SimpleNamespace(
+            axes=[axis],
+            plotter_arrays=[types.SimpleNamespace(
+                psy=types.SimpleNamespace(arr_name='0'))])
+        reader.create_grouper = mock.Mock(return_value=grouper)
+
+        import psyplot.project as psy
+
+        with mock.patch(
+                'straditize.straditizer.should_use_headless_figure',
+                return_value=True), \
+                mock.patch(
+                    'straditize.straditizer.create_matplotlib_figure',
+                    return_value=fig) as create_fig, \
+                mock.patch(
+                    'matplotlib.pyplot.figure',
+                    side_effect=AssertionError(
+                        'pyplot.figure should not be used')), \
+                mock.patch.object(
+                    psy.Project, 'block_signals', _BlockSignals()), \
+                mock.patch.object(
+                    psy, 'gcp',
+                    return_value=lambda **kwargs: _FakeProject(axis)), \
+                mock.patch.object(psy, 'scp') as scp:
+            sp, groupers = reader.plot_results(df)
+
+        create_fig.assert_called_once_with(headless=True)
+        scp.assert_not_called()
+        self.assertIs(groupers[0], grouper)
+        self.assertIsNotNone(sp)
 
 
 if __name__ == '__main__':

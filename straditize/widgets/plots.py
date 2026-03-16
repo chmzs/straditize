@@ -145,24 +145,26 @@ class PlotControlTable(StraditizerControlBase, QTableWidget):
         def hide_or_show(checked):
             checked = checked is True or checked == Qt.Checked
             artist = None
-            for artist in get_artists():
+            artists = [artist for artist in get_artists() if artist is not None]
+            for artist in artists:
                 artist.set_visible(checked)
             if artist is not None:
-                self.draw_figs(get_artists())
+                self.draw_figs(artists)
 
         def trigger_plot_btn():
-            a = next(iter(get_artists()), None)
+            artists = [artist for artist in get_artists() if artist is not None]
+            a = next(iter(artists), None)
             if a is None:
                 if can_be_plotted is None or can_be_plotted():
                     plot_func()
                     cb.setChecked(True)
                     btn.setIcon(QIcon(get_icon('invalid.png')))
                     btn.setToolTip('Remove ' + what)
-                    self.draw_figs(get_artists())
+                    self.draw_figs([artist for artist in get_artists()
+                                    if artist is not None])
                     cb.setEnabled(True)
             else:
-                fig = a.axes.figure
-                figs = {a.axes.figure for a in get_artists()}
+                figs = {artist.axes.figure for artist in artists}
                 remove_func()
                 btn.setIcon(QIcon(get_icon('valid.png')))
                 btn.setToolTip('Show ' + what)
@@ -322,15 +324,20 @@ class PlotControlTable(StraditizerControlBase, QTableWidget):
         --------
         plot_data_box
         """
+        ret = []
         try:
-            ret = [self.straditizer.data_box]
+            data_box = self.straditizer.data_box
         except AttributeError:
-            ret = [None]
+            data_box = None
+        if data_box is not None:
+            ret.append(data_box)
         try:
-            ret.append(self.straditizer.magni_data_box)
+            magni_data_box = self.straditizer.magni_data_box
         except AttributeError:
-            pass
-        return ret if ret else []
+            magni_data_box = None
+        if magni_data_box is not None:
+            ret.append(magni_data_box)
+        return ret
 
     def can_plot_data_box(self):
         """Test whether the box around the diagram part can be plotted
