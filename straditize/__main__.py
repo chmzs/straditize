@@ -22,11 +22,13 @@ from psyplot_gui import docstrings
 import os
 import os.path as osp
 from straditize.common import (
+    configure_qt_opengl,
     ensure_asyncio_event_loop,
     patch_psyplot_gui_common,
     patch_psyplot_gui_asyncio,
     patch_psyplot_gui_backend,
     patch_psyplot_gui_entrypoints,
+    patch_psyplot_gui_opengl,
 )
 from straditize.version import __version__
 
@@ -75,7 +77,9 @@ def start_app(fname=None, output=None, xlim=None, ylim=None,
         patch_psyplot_gui_backend()
         patch_psyplot_gui_common()
         patch_psyplot_gui_entrypoints()
+        patch_psyplot_gui_opengl()
         ensure_asyncio_event_loop()
+        configure_qt_opengl(kwargs.get('opengl_implementation'))
         if exec_:
             app = QApplication(sys.argv)
         cwd = osp.abspath(kwargs.get('pwd') or os.getcwd())
@@ -178,7 +182,7 @@ def get_parser(create=True):
 
     if create:
         parser.create_arguments()
-    parser.epilog = docstrings.dedents("""
+    parser.epilog = docstrings.dedent("""
     STRADITIZE  Copyright (C) 2018-2019  Philipp S. Sommer
 
     This program comes with ABSOLUTELY NO WARRANTY.

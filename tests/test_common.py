@@ -8,8 +8,10 @@ from unittest import mock
 import pandas as pd
 
 from straditize.common import (
+    configure_qt_opengl,
     ensure_asyncio_event_loop,
     ensure_qt_int,
+    patch_psyplot_gui_opengl,
     patch_psyplot_gui_entrypoints,
     ensure_toolbar_message_signal,
     nearest_index_position,
@@ -68,6 +70,63 @@ class CommonHelpersTest(unittest.TestCase):
         self.assertEqual(ensure_qt_int(10), 10)
         self.assertEqual(ensure_qt_int(10.2), 10)
         self.assertEqual(ensure_qt_int(10.9), 11)
+
+    def test_configure_qt_opengl_before_application_exists(self):
+        fake_psyplot_gui = types.ModuleType('psyplot_gui')
+        fake_psyplot_gui._set_opengl_implementation = mock.Mock()
+        fake_qtcompat = types.ModuleType('psyplot_gui.compat.qtcompat')
+        fake_qtcompat.QCoreApplication = mock.Mock()
+        fake_qtcompat.QCoreApplication.instance.return_value = None
+
+        with mock.patch.dict(
+                sys.modules,
+                {'psyplot_gui': fake_psyplot_gui,
+                 'psyplot_gui.compat.qtcompat': fake_qtcompat},
+                clear=False):
+            self.assertTrue(configure_qt_opengl('software'))
+
+        fake_qtcompat.QCoreApplication.instance.assert_called_once_with()
+        fake_psyplot_gui._set_opengl_implementation.assert_called_once_with(
+            'software')
+
+    def test_configure_qt_opengl_skips_existing_application(self):
+        fake_psyplot_gui = types.ModuleType('psyplot_gui')
+        fake_psyplot_gui._set_opengl_implementation = mock.Mock()
+        fake_qtcompat = types.ModuleType('psyplot_gui.compat.qtcompat')
+        fake_qtcompat.QCoreApplication = mock.Mock()
+        fake_qtcompat.QCoreApplication.instance.return_value = object()
+
+        with mock.patch.dict(
+                sys.modules,
+                {'psyplot_gui': fake_psyplot_gui,
+                 'psyplot_gui.compat.qtcompat': fake_qtcompat},
+                clear=False):
+            self.assertFalse(configure_qt_opengl('software'))
+
+        fake_qtcompat.QCoreApplication.instance.assert_called_once_with()
+        fake_psyplot_gui._set_opengl_implementation.assert_not_called()
+
+    def test_patch_psyplot_gui_opengl_skips_late_configuration(self):
+        fake_psyplot_gui = types.ModuleType('psyplot_gui')
+
+        def original(option):
+            return ('configured', option)
+
+        fake_psyplot_gui._set_opengl_implementation = original
+        fake_qtcompat = types.ModuleType('psyplot_gui.compat.qtcompat')
+        fake_qtcompat.QCoreApplication = mock.Mock()
+        fake_qtcompat.QCoreApplication.instance.return_value = object()
+
+        with mock.patch.dict(
+                sys.modules,
+                {'psyplot_gui': fake_psyplot_gui,
+                 'psyplot_gui.compat.qtcompat': fake_qtcompat},
+                clear=False):
+            self.assertTrue(patch_psyplot_gui_opengl())
+            self.assertIsNone(
+                fake_psyplot_gui._set_opengl_implementation('software'))
+
+        fake_qtcompat.QCoreApplication.instance.assert_called_once_with()
 
     def test_patch_psyplot_gui_entrypoints_supports_select_api(self):
         class DummyEntryPoint(object):

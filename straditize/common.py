@@ -71,6 +71,44 @@ def ensure_qt_int(value):
     return int(round(value))
 
 
+def patch_psyplot_gui_opengl():
+    """Avoid late OpenGL configuration warnings from psyplot-gui startup."""
+    try:
+        import psyplot_gui
+        from psyplot_gui.compat.qtcompat import QCoreApplication
+    except ImportError:
+        return False
+
+    original = psyplot_gui._set_opengl_implementation
+    if getattr(original, '_straditize_patched', False):
+        return True
+
+    @wraps(original)
+    def wrapped(*args, **kwargs):
+        if QCoreApplication.instance() is not None:
+            return None
+        return original(*args, **kwargs)
+
+    wrapped._straditize_patched = True
+    psyplot_gui._set_opengl_implementation = wrapped
+    return True
+
+
+def configure_qt_opengl(opengl_implementation=None):
+    """Configure psyplot-gui OpenGL before QApplication creation."""
+    try:
+        import psyplot_gui
+        from psyplot_gui.compat.qtcompat import QCoreApplication
+    except ImportError:
+        return False
+
+    patch_psyplot_gui_opengl()
+    if QCoreApplication.instance() is not None:
+        return False
+    psyplot_gui._set_opengl_implementation(opengl_implementation)
+    return True
+
+
 def ensure_asyncio_event_loop():
     """Return a usable event loop for GUI startup on modern Python versions.
 
