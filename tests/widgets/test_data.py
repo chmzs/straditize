@@ -371,8 +371,8 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
         self.assertTrue(export_df.called)
         exported = export_df.call_args[0][0]
         self.assertFrameEqual(
-            exported, self.straditizer.data_reader.sample_locs,
-            check_index_type=False)
+            exported, self.straditizer.final_df,
+            check_index_type=False, check_dtype=False)
 
 
 class ChildReaderFrameworkTest(bt.StraditizeWidgetsTestCase):

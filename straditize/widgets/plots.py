@@ -19,6 +19,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from itertools import chain
 from collections import OrderedDict
+import numpy as np
 from straditize.widgets import StraditizerControlBase
 from psyplot_gui.compat.qtcompat import (
     QTableWidget, QCheckBox, QToolButton, QIcon, Qt, with_qt5, QtCore, QWidget,
@@ -715,6 +716,65 @@ class ResultsPlot(StraditizerControlBase):
             df = self.straditizer.data_reader._full_df
         return df, samples
 
+    def _get_export_df(self, df, samples):
+        """Return the dataframe that should be exported from the review."""
+        translated = self.straditizer.final_df if samples else \
+            self.straditizer.full_df
+        return translated if translated is not None else df
+
+    def _format_axis_value(self, value):
+        """Format axis labels without noisy trailing decimals."""
+        if np.isclose(value, round(value)):
+            return str(int(round(value)))
+        return ('%g' % value)
+
+    def _apply_yaxis_translation(self, ax):
+        """Show translated y ticks when a y-axis calibration exists."""
+        stradi = self.straditizer
+        if (stradi is None or stradi.data_ylim is None or
+                stradi.yaxis_data is None or stradi._yaxis_px_orig is None):
+            return
+        values = np.linspace(stradi.yaxis_data[0], stradi.yaxis_data[1], 5)
+        positions = np.asarray(stradi.data2px_y(values), dtype=float) + \
+            float(np.min(stradi.data_ylim))
+        ax.set_yticks(positions)
+        ax.set_yticklabels(list(map(self._format_axis_value, values)))
+        ylabel = stradi.get_attr('Y-axis name') or ''
+        if ylabel:
+            ax.set_ylabel(ylabel)
+
+    def _apply_xaxis_translation(self, ax):
+        """Show per-column translated x ticks when x calibrations exist."""
+        reader = getattr(self.straditizer, 'data_reader', None)
+        if reader is None:
+            return
+        ticks = []
+        labels = []
+        for child in reader.iter_all_readers:
+            if getattr(child, 'is_exaggerated', False):
+                continue
+            if child.xaxis_data is None or child._xaxis_px_orig is None:
+                continue
+            try:
+                x_positions = np.asarray(child.xaxis_px, dtype=float)
+            except ValueError:
+                continue
+            x_values = np.asarray(child.xaxis_data, dtype=float)
+            extent_x0 = float(child.extent[0] if child.extent is not None else 0)
+            for col in child.columns:
+                start = float(child.all_column_starts[col]) + extent_x0
+                for pos, value in zip(x_positions, x_values):
+                    ticks.append(start + pos)
+                    labels.append(self._format_axis_value(value))
+        if ticks:
+            ax.set_xticks(ticks)
+            ax.set_xticklabels(labels)
+
+    def _apply_axis_translations(self, ax):
+        """Reflect existing axis calibrations in the review dialog."""
+        self._apply_yaxis_translation(ax)
+        self._apply_xaxis_translation(ax)
+
     def _close_results_dialog(self):
         """Close an existing result-review dialog."""
         dialog = self.results_dialog
@@ -759,13 +819,15 @@ class ResultsPlot(StraditizerControlBase):
     def plot_results(self):
         """Plot the digitized result over the source image."""
         df, samples = self._get_current_results()
+        export_df = self._get_export_df(df, samples)
         image = self.straditizer.image
         image_extent = [0, image.size[0], image.size[1], 0]
         self._close_results_dialog()
-        dialog = ResultsPlotDialog(self, df)
+        dialog = ResultsPlotDialog(self, export_df)
         fig = dialog.canvas.figure
         fig, ax, artists = self.straditizer.data_reader.plot_results_overlay(
             df, fig=fig, samples=samples, image=image, image_extent=image_extent)
+        self._apply_axis_translations(ax)
         dialog.canvas.draw_idle()
         self.results_dialog = dialog
         dialog.destroyed.connect(lambda *args: setattr(self, 'results_dialog', None))
