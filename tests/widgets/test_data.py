@@ -346,9 +346,33 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
         self.assertFalse(sw.plot_control.results_plot.cb_final.isEnabled())
         self.test_load_samples()
         fig, ax, artists = sw.plot_control.results_plot.plot_results()
+        dialog = sw.plot_control.results_plot.results_dialog
+        self.assertIsNotNone(dialog)
+        self.assertTrue(dialog.isVisible())
         self.assertIs(artists['image'], ax.images[0])
         self.assertGreaterEqual(len(artists['fills']), 1)
         self.assertGreaterEqual(len(artists['lines']), 1)
+        QTest.mouseClick(dialog.btn_close, Qt.LeftButton)
+        self.assertFalse(dialog.isVisible())
+
+    def test_plot_results_dialog_exports_current_data(self):
+        """The result-review dialog should export the data it is showing."""
+        self.test_load_samples()
+        results_plot = self.straditizer_widgets.plot_control.results_plot
+        results_plot.cb_final.setChecked(True)
+
+        with mock.patch.object(
+                self.straditizer_widgets.menu_actions,
+                '_export_df') as export_df:
+            results_plot.plot_results()
+            dialog = results_plot.results_dialog
+            QTest.mouseClick(dialog.btn_export, Qt.LeftButton)
+
+        self.assertTrue(export_df.called)
+        exported = export_df.call_args[0][0]
+        self.assertFrameEqual(
+            exported, self.straditizer.data_reader.sample_locs,
+            check_index_type=False)
 
 
 class ChildReaderFrameworkTest(bt.StraditizeWidgetsTestCase):

@@ -22,8 +22,15 @@ from collections import OrderedDict
 from straditize.widgets import StraditizerControlBase
 from psyplot_gui.compat.qtcompat import (
     QTableWidget, QCheckBox, QToolButton, QIcon, Qt, with_qt5, QtCore, QWidget,
-    QHBoxLayout, QVBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem)
+    QHBoxLayout, QVBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
+    QDialog, QDialogButtonBox)
 from psyplot_gui.common import get_icon
+from matplotlib.figure import Figure
+
+if with_qt5:
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+else:
+    from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 
 if with_qt5:
     from PyQt5.QtWidgets import QHeaderView
@@ -683,6 +690,9 @@ class ResultsPlot(StraditizerControlBase):
     #: plotted
     cb_final = None
 
+    #: The dialog showing the current result review figure
+    results_dialog = None
+
     def __init__(self, straditizer_widgets):
         self.init_straditizercontrol(straditizer_widgets)
 
@@ -695,6 +705,27 @@ class ResultsPlot(StraditizerControlBase):
         self.cb_final.setEnabled(False)
 
         self.btn_plot.clicked.connect(self.plot_results)
+
+    def _get_current_results(self):
+        """Return the dataframe and mode for the current plot settings."""
+        samples = self.cb_final.isEnabled() and self.cb_final.isChecked()
+        if samples:
+            df = self.straditizer.data_reader.sample_locs
+        else:
+            df = self.straditizer.data_reader._full_df
+        return df, samples
+
+    def _close_results_dialog(self):
+        """Close an existing result-review dialog."""
+        dialog = self.results_dialog
+        self.results_dialog = None
+        if dialog is not None:
+            dialog.close()
+            dialog.deleteLater()
+
+    def export_plot_data(self, df):
+        """Export the dataframe currently shown in the review dialog."""
+        self.straditizer_widgets.menu_actions._export_df(df)
 
     def setup_children(self, item):
         tree = self.straditizer_widgets.tree
@@ -722,18 +753,68 @@ class ResultsPlot(StraditizerControlBase):
                 self.straditizer.data_reader._full_df is not None)
         except AttributeError:
             self.btn_plot.setEnabled(False)
+        if not self.btn_plot.isEnabled():
+            self._close_results_dialog()
 
     def plot_results(self):
         """Plot the digitized result over the source image."""
-        samples = self.cb_final.isEnabled() and self.cb_final.isChecked()
-        if samples:
-            df = self.straditizer.data_reader.sample_locs
-        else:
-            df = self.straditizer.data_reader._full_df
+        df, samples = self._get_current_results()
         image = self.straditizer.image
         image_extent = [0, image.size[0], image.size[1], 0]
-        return self.straditizer.data_reader.plot_results_overlay(
-            df, samples=samples, image=image, image_extent=image_extent)
+        self._close_results_dialog()
+        dialog = ResultsPlotDialog(self, df)
+        fig = dialog.canvas.figure
+        fig, ax, artists = self.straditizer.data_reader.plot_results_overlay(
+            df, fig=fig, samples=samples, image=image, image_extent=image_extent)
+        dialog.canvas.draw_idle()
+        self.results_dialog = dialog
+        dialog.destroyed.connect(lambda *args: setattr(self, 'results_dialog', None))
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        return fig, ax, artists
+
+
+class ResultsPlotDialog(QDialog):
+    """A dialog that previews the result overlay and exports shown data."""
+
+    def __init__(self, results_plot, df, *args, **kwargs):
+        super(ResultsPlotDialog, self).__init__(
+            results_plot.straditizer_widgets, *args, **kwargs)
+        self.results_plot = results_plot
+        self.df = df.copy()
+        self.setWindowTitle('Digitized result review')
+        self.setModal(False)
+
+        self.canvas = FigureCanvas(Figure())
+        self.canvas.figure.set_tight_layout(True)
+
+        self.btn_export = QPushButton('Export data')
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Close)
+        self.btn_close = self.button_box.button(QDialogButtonBox.Close)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.canvas)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.btn_export)
+        buttons.addWidget(self.button_box)
+        layout.addLayout(buttons)
+        self.setLayout(layout)
+
+        self.btn_export.clicked.connect(self._export)
+        self.button_box.rejected.connect(self.close)
+
+        parent = self.parentWidget()
+        if parent is not None:
+            width = max(720, int(parent.width() * 0.8))
+            height = max(540, int(parent.height() * 0.8))
+            self.resize(width, height)
+
+    def _export(self):
+        """Export the dataframe currently visualized in this dialog."""
+        self.results_plot.export_plot_data(self.df)
 
 
 class PlotControl(StraditizerControlBase, QWidget):
