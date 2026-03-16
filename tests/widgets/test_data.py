@@ -316,18 +316,39 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
             any(issubclass(w.category, FutureWarning) for w in caught),
             msg=[str(w.message) for w in caught])
 
-    def test_find_samples_method_selector_hidden_for_non_stacked_reader(self):
-        self.init_reader()
-        self.assertTrue(self.digitizer.sample_method_child.isHidden())
+    def test_find_samples_uses_reader_default_for_non_stacked_reader(self):
+        self.test_digitize()
+        calls = []
+        samples = pd.DataFrame([[1.0, 2.0, 3.0]], index=[10],
+                               columns=self.reader.columns)
+        rough = pd.DataFrame(
+            [[9, 11, 9, 11, 9, 11]], index=[10],
+            columns=pd.MultiIndex.from_product(
+                [self.reader.columns, ['vmin', 'vmax']]))
+
+        def fake_find_samples(**kwargs):
+            calls.append(kwargs)
+            return samples.copy(), rough.copy()
+
+        self.reader.find_samples = fake_find_samples
+
+        QTest.mouseClick(self.digitizer.btn_find_samples, Qt.LeftButton)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['pixel_tol'],
+                         self.digitizer.sp_pixel_tol.value())
+        self.assertFrameEqual(self.reader.sample_locs, samples)
 
     def test_plot_results(self):
-        """Test the plotting of the results"""
+        """Plot results should overlay the digitization on the source image."""
         sw = self.straditizer_widgets
+        self.assertFalse(hasattr(sw.plot_control.results_plot, 'cb_transformed'))
         self.assertFalse(sw.plot_control.results_plot.cb_final.isEnabled())
         self.test_load_samples()
-        sp, groupers = sw.plot_control.results_plot.plot_results()
-        self.assertEqual(
-            len(sp), len(self.straditizer.data_reader._full_df.columns))
+        fig, ax, artists = sw.plot_control.results_plot.plot_results()
+        self.assertIs(artists['image'], ax.images[0])
+        self.assertGreaterEqual(len(artists['fills']), 1)
+        self.assertGreaterEqual(len(artists['lines']), 1)
 
 
 class ChildReaderFrameworkTest(bt.StraditizeWidgetsTestCase):

@@ -283,9 +283,6 @@ class DigitizingControl(StraditizerControlBase):
     #: sample finding algorithm
     sp_pixel_tol = None
 
-    #: A QComboBox to choose how stacked-area samples should be estimated
-    cb_find_samples_method = None
-
     #: A button to load samples from a file
     btn_load_samples = None
 
@@ -332,8 +329,6 @@ class DigitizingControl(StraditizerControlBase):
     _change_reader = True
 
     digitize_item = None
-
-    sample_method_child = None
 
     @property
     def selection_toolbar(self):
@@ -559,12 +554,6 @@ class DigitizingControl(StraditizerControlBase):
         self.sp_pixel_tol.setValue(5)
         self.sp_pixel_tol.setToolTip(
             'Minimum distance between two samples in pixels')
-        self.cb_find_samples_method = QComboBox()
-        self.cb_find_samples_method.addItems(
-            ['Column-wise detection', 'Consensus interpolation'])
-        self.cb_find_samples_method.setToolTip(
-            'Choose how stacked-area samples should be estimated')
-
         self.btn_select_occurences = QPushButton('Select occurences')
         self.btn_select_occurences.setToolTip(
             'Select where a measurement was reported but without an '
@@ -608,7 +597,7 @@ class DigitizingControl(StraditizerControlBase):
             self.btn_show_small_parts, self.txt_max_small_size,
             self.btn_align_vertical,
             self.btn_edit_samples, self.btn_find_samples,
-            self.btn_load_samples, self.cb_find_samples_method,
+            self.btn_load_samples,
             self.btn_select_occurences, self.btn_edit_occurences,
             self.txt_occurences_value, self.cb_split_source
             ]
@@ -709,7 +698,6 @@ class DigitizingControl(StraditizerControlBase):
             self.txt_occurences_value.setText(
                 str(self.straditizer.data_reader.occurences_value))
         self.fill_cb_readers()
-        self.refresh_sample_method_visibility()
 
     def toggle_sp_max_lw(self, state):
         """Toggle :attr:`sp_max_lw` based on :attr:`cb_max_lw`
@@ -738,7 +726,6 @@ class DigitizingControl(StraditizerControlBase):
         self.maybe_show_btn_reset_samples()
         self.toggle_txt_tolerance(self.cb_reader_type.currentText())
         self.enable_or_disable_btn_highlight_small_selection()
-        self.refresh_sample_method_visibility()
 
     def enable_or_disable_btn_highlight_small_selection(self):
         """Enable the :attr:`btn_highlight_small_selection` during a selection
@@ -758,21 +745,6 @@ class DigitizingControl(StraditizerControlBase):
         """Show the :attr:`btn_reset_samples` if the samples are set"""
         self.btn_reset_samples.setVisible(
             self.should_be_enabled(self.btn_reset_samples))
-
-    def uses_stacked_area_reader(self):
-        """Whether the current reader supports stacked sample modes."""
-        return (self.straditizer is not None and
-                self.straditizer.data_reader is not None and
-                get_reader_name(self.straditizer.data_reader) == 'stacked area')
-
-    def refresh_sample_method_visibility(self):
-        """Show stacked-area-specific sample controls only when relevant."""
-        if self.sample_method_child is None:
-            return
-        show = self.uses_stacked_area_reader()
-        self.sample_method_child.setHidden(not show)
-        if not show:
-            self.cb_find_samples_method.setCurrentIndex(0)
 
     def update_tolerance(self, s):
         """Set the readers :attr:`~straditizer.binary.BarDataReader.tolerance`
@@ -1238,16 +1210,6 @@ class DigitizingControl(StraditizerControlBase):
         find_child.addChild(find_child2)
         self.tree.setItemWidget(find_child2, 0, w)
 
-        self.sample_method_child = QTreeWidgetItem(0)
-        hbox = QHBoxLayout()
-        hbox.addWidget(QLabel('Method'))
-        hbox.addWidget(self.cb_find_samples_method)
-        w = QWidget()
-        w.setLayout(hbox)
-        find_child.addChild(self.sample_method_child)
-        self.tree.setItemWidget(self.sample_method_child, 0, w)
-        self.sample_method_child.setHidden(True)
-
         load_child = QTreeWidgetItem(0)
         child.addChild(load_child)
         self.tree.setItemWidget(load_child, 0, self.btn_load_samples)
@@ -1445,9 +1407,7 @@ class DigitizingControl(StraditizerControlBase):
             kws['max_len'] = int(self.txt_max_len.text())
         reader = self.straditizer.data_reader
         finder = reader.find_samples
-        if (self.uses_stacked_area_reader() and
-                self.cb_find_samples_method.currentText() ==
-                'Consensus interpolation' and
+        if (get_reader_name(reader) == 'stacked area' and
                 hasattr(reader, 'find_consensus_samples')):
             finder = reader.find_consensus_samples
         reader.add_samples(*finder(**kws))

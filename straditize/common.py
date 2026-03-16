@@ -246,7 +246,15 @@ def patch_psyplot_gui_entrypoints():
         exc = self["plugins.exclude"]
         logger = logging.getLogger('psyplot_gui.config.rcsetup')
         self._plugins = self._plugins or []
-        for raw_ep in metadata.entry_points(group='psyplot_gui'):
+        raw_eps = metadata.entry_points()
+        if hasattr(raw_eps, 'select'):
+            raw_eps = raw_eps.select(group='psyplot_gui')
+        elif isinstance(raw_eps, dict):
+            raw_eps = raw_eps.get('psyplot_gui', [])
+        else:
+            raw_eps = [ep for ep in raw_eps
+                       if getattr(ep, 'group', None) == 'psyplot_gui']
+        for raw_ep in raw_eps:
             ep = _CompatEntryPoint(raw_ep)
             plugin_name = "%s:%s:%s" % (
                 ep.module, ":".join(ep.attrs), ep.name)

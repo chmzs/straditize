@@ -391,6 +391,75 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
         self.assertIs(groupers[0], grouper)
         self.assertIsNotNone(sp)
 
+    def test_plot_results_overlay_area_uses_background_fill_and_line(self):
+        """Area overlays should draw the image, fill, and boundary line."""
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        reader = binary.DataReader(np.ones((6, 8), dtype=np.int8), plot=False,
+                                   extent=[2, 10, 6, 0])
+        reader.columns = [0]
+        reader.all_column_starts = np.array([0])
+        reader._full_df = pd.DataFrame({0: [1.0, 2.0, 3.0]}, index=[0, 1, 2])
+
+        fig = Figure()
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+        image = np.zeros((8, 12, 4), dtype=np.uint8)
+
+        fig, ax, artists = reader.plot_results_overlay(
+            reader._full_df, ax=ax, samples=False, image=image,
+            image_extent=[0, 12, 8, 0])
+
+        self.assertIs(artists['image'], ax.images[0])
+        self.assertEqual(len(artists['fills']), 1)
+        self.assertEqual(len(artists['lines']), 1)
+
+    def test_plot_results_overlay_line_draws_lines_without_fill(self):
+        """Line overlays should not add area fills."""
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        reader = binary.LineDataReader(
+            np.ones((6, 8), dtype=np.int8), plot=False, extent=[0, 8, 6, 0])
+        reader.columns = [0]
+        reader.all_column_starts = np.array([0])
+        reader._full_df = pd.DataFrame({0: [2.0, 3.0, 1.0]}, index=[0, 1, 2])
+
+        fig = Figure()
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+
+        _, _, artists = reader.plot_results_overlay(
+            reader._full_df, ax=ax, samples=False)
+
+        self.assertEqual(len(artists['fills']), 0)
+        self.assertEqual(len(artists['lines']), 1)
+
+    def test_plot_results_overlay_bar_samples_use_rough_locations(self):
+        """Bar sample overlays should use the rough sample spans."""
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        reader = binary.BarDataReader(
+            np.ones((12, 8), dtype=np.int8), plot=False, extent=[1, 9, 12, 0])
+        reader.columns = [0]
+        reader.all_column_starts = np.array([0])
+        reader._sample_locs = pd.DataFrame({0: [2.0, 4.0]}, index=[5.0, 9.0])
+        reader._rough_locs = pd.DataFrame(
+            [[4.0, 7.0], [8.0, 11.0]], index=reader._sample_locs.index,
+            columns=pd.MultiIndex.from_product([[0], ['vmin', 'vmax']]))
+
+        fig = Figure()
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+
+        _, _, artists = reader.plot_results_overlay(
+            reader.sample_locs, ax=ax, samples=True)
+
+        self.assertEqual(len(artists['fills']), 2)
+        self.assertEqual(len(artists['lines']), 2)
+
 
 if __name__ == '__main__':
     unittest.main()

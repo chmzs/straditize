@@ -669,17 +669,15 @@ class PlotControlTable(StraditizerControlBase, QTableWidget):
 
 
 class ResultsPlot(StraditizerControlBase):
-    """A widget for plotting the final results
+    """A widget for reviewing digitized results on the source image.
 
-    This widgets contains a QPushButton :attr:`btn_plot` to plot the results
-    using the :meth:`straditize.binary.DataReader.plot_results` method"""
+    This widget contains a QPushButton :attr:`btn_plot` that opens a
+    comparison figure using
+    :meth:`straditize.binary.DataReader.plot_results_overlay`.
+    """
 
     #: The QPushButton to call the :meth:`plot_results` method
     btn_plot = None
-
-    #: A QCheckBox whether x- and y-axis should be translated from pixel to
-    #: data units
-    cb_transformed = None
 
     #: A QCheckBox whether the samples or the full digitized data shall be
     #: plotted
@@ -692,16 +690,9 @@ class ResultsPlot(StraditizerControlBase):
 
         self.cb_final = QCheckBox("Samples")
         self.cb_final.setToolTip(
-            "Create the diagram based on the samples only, not on the full "
-            "digized data")
-        self.cb_final.setChecked(True)
+            "Compare only the sample-based reconstruction on the source image")
+        self.cb_final.setChecked(False)
         self.cb_final.setEnabled(False)
-
-        self.cb_transformed = QCheckBox("Translated")
-        self.cb_transformed.setToolTip(
-            "Use the x-axis and y-axis translation")
-        self.cb_transformed.setChecked(True)
-        self.cb_transformed.setEnabled(False)
 
         self.btn_plot.clicked.connect(self.plot_results)
 
@@ -714,19 +705,11 @@ class ResultsPlot(StraditizerControlBase):
         widget = QWidget()
         vbox = QVBoxLayout()
         vbox.addWidget(self.cb_final)
-        vbox.addWidget(self.cb_transformed)
         widget.setLayout(vbox)
 
         tree.setItemWidget(child, 0, widget)
 
     def refresh(self):
-        try:
-            self.straditizer.yaxis_px
-            self.straditizer.data_reader.xaxis_px
-        except (AttributeError, ValueError):
-            self.cb_transformed.setEnabled(False)
-        else:
-            self.cb_transformed.setEnabled(True)
         try:
             assert (self.straditizer.data_reader._sample_locs is not None and
                     len(self.straditizer.data_reader._sample_locs))
@@ -741,29 +724,16 @@ class ResultsPlot(StraditizerControlBase):
             self.btn_plot.setEnabled(False)
 
     def plot_results(self):
-        """Plot the results
-
-        What is plotted depends on the :attr:`cb_transformed` and the
-        :attr:`cb_final`
-
-        :attr:`cb_transformed` and :attr:`cb_final` are checked
-            Plot the :attr:`straditize.straditizer.Straditizer.final_df`
-        :attr:`cb_transformed` is checked but not :attr:`cb_final`
-            Plot the :attr:`straditize.straditizer.Straditizer.full_df`
-        :attr:`cb_transformed` is not checked but :attr:`cb_final`
-            Plot the :attr:`straditize.binary.DataReader.sample_locs`
-        :attr:`cb_transformed` and :attr:`cb_final` are both not checked
-            Plot the :attr:`straditize.binary.DataReader.full_df`"""
-        transformed = self.cb_transformed.isEnabled() and \
-            self.cb_transformed.isChecked()
-        if self.cb_final.isEnabled() and self.cb_final.isChecked():
-            df = self.straditizer.final_df if transformed else \
-                self.straditizer.data_reader.sample_locs
+        """Plot the digitized result over the source image."""
+        samples = self.cb_final.isEnabled() and self.cb_final.isChecked()
+        if samples:
+            df = self.straditizer.data_reader.sample_locs
         else:
-            df = self.straditizer.full_df if transformed else \
-                self.straditizer.data_reader._full_df
-        return self.straditizer.data_reader.plot_results(
-            df, transformed=transformed)
+            df = self.straditizer.data_reader._full_df
+        image = self.straditizer.image
+        image_extent = [0, image.size[0], image.size[1], 0]
+        return self.straditizer.data_reader.plot_results_overlay(
+            df, samples=samples, image=image, image_extent=image_extent)
 
 
 class PlotControl(StraditizerControlBase, QWidget):

@@ -38,6 +38,17 @@ else:
     from itertools import zip_longest
 
 
+RESULT_OVERLAY_COLORS = list(mcol.TABLEAU_COLORS.values())
+RESULT_OVERLAY_FILL_ALPHA = 0.3
+RESULT_OVERLAY_LINE_ALPHA = 0.95
+RESULT_OVERLAY_LINEWIDTH = 1.75
+
+
+def result_overlay_color(index):
+    """Return a stable overlay color for the given column index."""
+    return RESULT_OVERLAY_COLORS[index % len(RESULT_OVERLAY_COLORS)]
+
+
 def only_parent(func):
     """Call the given `func` only from the parent reader"""
     @wraps(func)
@@ -2145,6 +2156,199 @@ class DataReader(LabelSelection):
         if not len(y):
             return
         self.sample_hlines = [ax.hlines(y, xmin, xmax, **kwargs)]
+
+    def _overlay_column_numbers(self, df):
+        """Infer the reader column numbers represented by a dataframe."""
+        try:
+            return [int(col) for col in df.columns]
+        except (TypeError, ValueError):
+            if self.columns is not None and len(df.columns) == len(self.columns):
+                return list(self.columns)
+            return list(range(df.shape[1]))
+
+    def _overlay_starts(self, column_numbers):
+        """Get absolute x-starts for the given column numbers."""
+        starts = np.asarray(self.all_column_starts, dtype=float)
+        x0 = float(self.extent[0] if self.extent is not None else 0.0)
+        return starts[column_numbers] + x0
+
+    def _overlay_ycoords(self, df):
+        """Get absolute y-positions for the row centers in `df`."""
+        y0 = float(self.extent[3] if self.extent is not None else 0.0)
+        return np.asarray(df.index, dtype=float) + 0.5 + y0
+
+    def _overlay_ybounds(self, vmin, vmax):
+        """Get absolute y-bounds for a vertical span."""
+        y0 = float(self.extent[3] if self.extent is not None else 0.0)
+        return float(vmin) + y0, float(vmax) + y0
+
+    def _overlay_values(self, values):
+        """Normalize plotted values for overlay rendering."""
+        ret = np.asarray(values, dtype=float).copy()
+        ret[ret == self.occurences_value] = np.nan
+        return ret
+
+    def _guess_overlay_image_extent(self, image):
+        """Infer the extent for the overlay background image."""
+        if image is None:
+            return self.extent
+        try:
+            width, height = image.size
+        except AttributeError:
+            height, width = np.shape(image)[:2]
+        try:
+            reader_width, reader_height = self.image.size
+        except AttributeError:
+            reader_height, reader_width = np.shape(self.image)[:2]
+        if width == reader_width and height == reader_height:
+            return self.extent
+        return [0, width, height, 0]
+
+    def _create_overlay_axes(self, ax=None, fig=None, image=None,
+                             image_extent=None):
+        """Create the figure, axes, and background for result overlays."""
+        from straditize.straditizer import (
+            create_matplotlib_figure, should_use_headless_figure)
+
+        if ax is None:
+            if fig is None:
+                fig = create_matplotlib_figure(
+                    headless=should_use_headless_figure())
+            ax = fig.subplots()
+        else:
+            fig = ax.figure
+
+        artists = {'image': None, 'fills': [], 'lines': []}
+        if image is None:
+            image = self.image
+        extent = image_extent or self._guess_overlay_image_extent(image)
+        if image is not None:
+            artists['image'] = ax.imshow(image, extent=extent, zorder=0)
+            ax.set_xlim(extent[0], extent[1])
+            ax.set_ylim(extent[2], extent[3])
+        ax.grid(False)
+        return fig, ax, artists
+
+    def _plot_area_overlay(self, df, ax, column_numbers, color_map):
+        """Plot area-like overlays with a fill and a boundary line."""
+        y = self._overlay_ycoords(df)
+        starts = self._overlay_starts(column_numbers)
+        artists = {'fills': [], 'lines': []}
+        for col_num, label, start in zip(column_numbers, df.columns, starts):
+            values = self._overlay_values(df.loc[:, label].values)
+            color = color_map[col_num]
+            artists['fills'].append(ax.fill_betweenx(
+                y, start, start + values, color=color,
+                alpha=RESULT_OVERLAY_FILL_ALPHA, zorder=2))
+            artists['lines'].append(ax.plot(
+                start + values, y, color=color,
+                alpha=RESULT_OVERLAY_LINE_ALPHA,
+                lw=RESULT_OVERLAY_LINEWIDTH, zorder=3)[0])
+        return artists
+
+    def _plot_line_overlay(self, df, ax, column_numbers, color_map):
+        """Plot line-reader overlays without fills."""
+        y = self._overlay_ycoords(df)
+        starts = self._overlay_starts(column_numbers)
+        artists = {'fills': [], 'lines': []}
+        for col_num, label, start in zip(column_numbers, df.columns, starts):
+            values = self._overlay_values(df.loc[:, label].values)
+            color = color_map[col_num]
+            artists['lines'].append(ax.plot(
+                start + values, y, color=color,
+                alpha=RESULT_OVERLAY_LINE_ALPHA,
+                lw=RESULT_OVERLAY_LINEWIDTH, zorder=3)[0])
+        return artists
+
+    def _plot_bar_overlay(self, df, ax, samples, column_numbers, color_map):
+        """Plot bar-reader overlays, using rough sample spans when available."""
+        artists = {'fills': [], 'lines': []}
+        starts = self._overlay_starts(column_numbers)
+        if samples and self.rough_locs is not None and len(df):
+            for row_key, row in df.iterrows():
+                rough_row = self.rough_locs.loc[row_key]
+                for col_num, label, start in zip(
+                        column_numbers, df.columns, starts):
+                    value = self._overlay_values([row[label]])[0]
+                    if np.isnan(value):
+                        continue
+                    try:
+                        vmin = rough_row[(col_num, 'vmin')]
+                        vmax = rough_row[(col_num, 'vmax')]
+                    except KeyError:
+                        ymin, ymax = self._overlay_ybounds(
+                            row_key, float(row_key) + 1.0)
+                    else:
+                        ymin, ymax = self._overlay_ybounds(vmin, vmax)
+                    color = color_map[col_num]
+                    artists['fills'].append(ax.fill_betweenx(
+                        [ymin, ymax], start, start + value, color=color,
+                        alpha=RESULT_OVERLAY_FILL_ALPHA, zorder=2))
+                    artists['lines'].append(ax.plot(
+                        [start + value, start + value], [ymin, ymax],
+                        color=color, alpha=RESULT_OVERLAY_LINE_ALPHA,
+                        lw=RESULT_OVERLAY_LINEWIDTH, zorder=3)[0])
+            return artists
+
+        y = self._overlay_ycoords(df)
+        for col_num, label, start in zip(column_numbers, df.columns, starts):
+            values = self._overlay_values(df.loc[:, label].values)
+            color = color_map[col_num]
+            artists['fills'].append(ax.fill_betweenx(
+                y, start, start + values, step='mid', color=color,
+                alpha=RESULT_OVERLAY_FILL_ALPHA, zorder=2))
+            artists['lines'].append(ax.step(
+                start + values, y, where='mid', color=color,
+                alpha=RESULT_OVERLAY_LINE_ALPHA,
+                lw=RESULT_OVERLAY_LINEWIDTH, zorder=3)[0])
+        return artists
+
+    def _plot_results_overlay_df(self, df, ax, samples=False,
+                                 column_numbers=None, color_map=None):
+        """Plot this reader's contribution to the overlay figure."""
+        column_numbers = column_numbers or self._overlay_column_numbers(df)
+        color_map = color_map or {
+            col: result_overlay_color(col) for col in column_numbers}
+        if isinstance(self, BarDataReader):
+            return self._plot_bar_overlay(
+                df, ax, samples=samples, column_numbers=column_numbers,
+                color_map=color_map)
+        if isinstance(self, LineDataReader):
+            return self._plot_line_overlay(df, ax, column_numbers, color_map)
+        return self._plot_area_overlay(df, ax, column_numbers, color_map)
+
+    def plot_results_overlay(self, df, ax=None, fig=None, samples=False,
+                             image=None, image_extent=None):
+        """Plot the digitized result over the source image for comparison."""
+        fig, ax, artists = self._create_overlay_axes(
+            ax=ax, fig=fig, image=image, image_extent=image_extent)
+        if df is None or df.empty:
+            return fig, ax, artists
+
+        column_numbers = self._overlay_column_numbers(df)
+        color_map = {
+            col_num: result_overlay_color(col_num)
+            for col_num in column_numbers}
+        reader_groups = []
+        for col_num, label in zip(column_numbers, df.columns):
+            reader = self.get_reader_for_col(col_num) or self
+            if getattr(reader, 'is_exaggerated', False):
+                continue
+            for group in reader_groups:
+                if group[0] is reader:
+                    group[1].append(col_num)
+                    group[2].append(label)
+                    break
+            else:
+                reader_groups.append([reader, [col_num], [label]])
+
+        for reader, cols, labels in reader_groups:
+            current = reader._plot_results_overlay_df(
+                df.loc[:, labels], ax=ax, samples=samples,
+                column_numbers=cols, color_map=color_map)
+            artists['fills'].extend(current['fills'])
+            artists['lines'].extend(current['lines'])
+        return fig, ax, artists
 
     def get_surrounding_slopes(self, indices, arr):
 
