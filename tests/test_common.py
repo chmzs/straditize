@@ -7,6 +7,7 @@ import pandas as pd
 
 from straditize.common import (
     ensure_asyncio_event_loop,
+    ensure_qt_int,
     ensure_toolbar_message_signal,
     nearest_index_position,
     nearest_index_value,
@@ -59,6 +60,11 @@ class CommonHelpersTest(unittest.TestCase):
         self.assertIs(signal, toolbar.message)
         self.assertEqual(toolbar.messages, ['hello'])
         self.assertEqual(received, ['hello'])
+
+    def test_ensure_qt_int_rounds_float_sizes(self):
+        self.assertEqual(ensure_qt_int(10), 10)
+        self.assertEqual(ensure_qt_int(10.2), 10)
+        self.assertEqual(ensure_qt_int(10.9), 11)
 
 
 if __name__ == '__main__':

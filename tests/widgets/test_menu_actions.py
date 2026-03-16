@@ -183,6 +183,21 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         self.assertFrameEqual(
             exported, self.straditizer.full_df, check_index_type=False)
 
+    def test_export_final_excel(self):
+        """Excel export should keep working with modern pandas."""
+        self.init_reader()
+        self.reader.digitize()
+        self.reader._get_sample_locs()
+        fname = self.get_random_filename(suffix='.xlsx')
+
+        self.straditizer_widgets.menu_actions.export_final(fname)
+
+        self.assertTrue(osp.exists(fname), msg=fname + ' is missing!')
+        exported = pd.read_excel(fname, sheet_name='Data', index_col=0)
+        self.assertFrameEqual(
+            exported, self.straditizer.final_df, check_index_type=False,
+            check_dtype=False)
+
     def test_export_dialog_handles_qt_resize_with_integer_sizes(self):
         """The export dialog should not pass float sizes to Qt resize."""
         self.init_reader()

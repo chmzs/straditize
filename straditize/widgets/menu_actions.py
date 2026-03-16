@@ -139,9 +139,10 @@ class ExportDfDialog(QDialog):
         meta = self.stradi.valid_attrs
         if ending in ['.xls', '.xlsx']:
             with pd.ExcelWriter(fname) as writer:
-                self.df.to_excel(writer, 'Data')
+                self.df.to_excel(writer, sheet_name='Data')
                 if self.cb_include_meta.isChecked() and len(meta):
-                    meta.to_excel(writer, 'Metadata', header=False)
+                    meta.to_excel(
+                        writer, sheet_name='Metadata', header=False)
         else:
             with open(fname, 'w') as f:
                 if self.cb_include_meta.isChecked():

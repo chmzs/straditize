@@ -66,6 +66,11 @@ def nearest_index_value(index, value):
     return index[nearest_index_position(index, value)]
 
 
+def ensure_qt_int(value):
+    """Convert float-like Qt size arguments to integers."""
+    return int(round(value))
+
+
 def ensure_asyncio_event_loop():
     """Return a usable event loop for GUI startup on modern Python versions.
 
@@ -180,6 +185,29 @@ def patch_psyplot_gui_backend():
         return True
 
     toolbar_cls.message = _ToolbarMessageDescriptor()
+    return True
+
+
+def patch_psyplot_gui_common():
+    """Patch psyplot-gui widgets that still pass float sizes to Qt."""
+    try:
+        from psyplot_gui.common import PyErrorMessage
+    except ImportError:
+        return False
+
+    original = PyErrorMessage.resize
+    if getattr(original, '_straditize_patched', False):
+        return True
+
+    @wraps(original)
+    def wrapped(self, *args):
+        if len(args) == 2:
+            return original(
+                self, ensure_qt_int(args[0]), ensure_qt_int(args[1]))
+        return original(self, *args)
+
+    wrapped._straditize_patched = True
+    PyErrorMessage.resize = wrapped
     return True
 
 

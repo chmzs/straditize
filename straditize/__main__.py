@@ -19,15 +19,16 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>."""
 import sys
 from psyplot_gui import docstrings
-import straditize
 import os
 import os.path as osp
 from straditize.common import (
     ensure_asyncio_event_loop,
+    patch_psyplot_gui_common,
     patch_psyplot_gui_asyncio,
     patch_psyplot_gui_backend,
     patch_psyplot_gui_entrypoints,
 )
+from straditize.version import __version__
 
 
 docstrings.delete_params('psyplot_gui.start_app.parameters', 'fnames',
@@ -72,6 +73,7 @@ def start_app(fname=None, output=None, xlim=None, ylim=None,
         exec_ = kwargs.pop('exec_', True)
         patch_psyplot_gui_asyncio()
         patch_psyplot_gui_backend()
+        patch_psyplot_gui_common()
         patch_psyplot_gui_entrypoints()
         ensure_asyncio_event_loop()
         if exec_:
@@ -171,7 +173,7 @@ def get_parser(create=True):
     parser.update_arg('full', group=stradi_grp, short='f')
 
     parser.update_arg('version', short='V', long='version', action='version',
-                      version=straditize.__version__, if_existent=False,
+                      version=__version__, if_existent=False,
                       group=stradi_grp)
 
     if create:
