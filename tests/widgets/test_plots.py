@@ -114,6 +114,11 @@ class PlotControlTableTest(bt.StraditizeWidgetsTestCase):
         self.straditizer_widgets.refresh()
         self._test_plot('Reconstruction')
 
+    def test_hide_plot_ignores_missing_artists(self):
+        self.table.add_item('Broken artists', lambda: [None])
+        self.table.hide_funcs['Broken artists'](False)
+        self.table.hide_funcs['Broken artists'](True)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -149,7 +149,8 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
     @property
     def toolbar(self):
         """The toolbar of the :attr:`canvas`"""
-        return self.canvas.toolbar
+        canvas = self.canvas
+        return getattr(canvas, 'toolbar', None)
 
     @property
     def select_action(self):
@@ -748,7 +749,7 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
 
     def disconnect(self):
         if self.set_cursor_id is not None:
-            if self.canvas is None:
+            if self.canvas is not None:
                 self.canvas.mpl_disconnect(self.set_cursor_id)
                 self.canvas.mpl_disconnect(self.reset_cursor_id)
             self.set_cursor_id = None
@@ -788,7 +789,9 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
             self._action_clicked = next(key for key, a in self._actions.items()
                                         if a.isChecked())
 
-        self.toolbar.set_message(self.toolbar.mode)
+        toolbar = self.toolbar
+        if toolbar is not None:
+            toolbar.set_message(toolbar.mode)
 
     def enable_or_disable_widgets(self, b):
         super(SelectionToolbar, self).enable_or_disable_widgets(b)
@@ -822,22 +825,24 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
 
     def _on_axes_enter(self, event):
         ax = self.ax
-        if ax is None:
+        toolbar = self.toolbar
+        if ax is None or toolbar is None:
             return
-        if (event.inaxes is ax and self.toolbar.mode.name == '' and
+        if (event.inaxes is ax and toolbar.mode.name == '' and
                 self.selector is not None):
             if self._lastCursor != cursors.SELECT_REGION:
-                self.toolbar.set_cursor(cursors.SELECT_REGION)
+                toolbar.set_cursor(cursors.SELECT_REGION)
                 self._lastCursor = cursors.SELECT_REGION
 
     def _on_axes_leave(self, event):
         ax = self.ax
-        if ax is None:
+        toolbar = self.toolbar
+        if ax is None or toolbar is None:
             return
-        if (event.inaxes is ax and self.toolbar.mode.name == '' and
+        if (event.inaxes is ax and toolbar.mode.name == '' and
                 self.selector is not None):
             if self._lastCursor != cursors.POINTER:
-                self.toolbar.set_cursor(cursors.POINTER)
+                toolbar.set_cursor(cursors.POINTER)
                 self._lastCursor = cursors.POINTER
 
     def end_selection(self):
@@ -1115,7 +1120,7 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
                         axis=-1)] = True
         if not self.cb_whole_fig.isChecked():
             import skimage.morphology as skim
-            all_labels = skim.label(mask, 8, return_num=False)
+            all_labels = skim.label(mask, connectivity=2, return_num=False)
             selected_labels = np.unique(all_labels[sly, slx])
             mask[~np.isin(all_labels, selected_labels)] = False
         if self.remove_select_action.isChecked():

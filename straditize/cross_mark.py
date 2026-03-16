@@ -30,6 +30,14 @@ else:
     from itertools import zip_longest
 
 
+def _get_toolbar_mode(fig):
+    """Safely read the matplotlib toolbar mode in GUI and headless tests."""
+    canvas = getattr(fig, 'canvas', None)
+    manager = getattr(canvas, 'manager', None)
+    toolbar = getattr(manager, 'toolbar', None)
+    return getattr(toolbar, 'mode', '') or ''
+
+
 class CrossMarks(object):
     """
     A set of draggable marks in a matplotlib axes
@@ -546,7 +554,7 @@ class CrossMarks(object):
         return not (
             self.lock is not None or
             event.inaxes != self.ax or event.button not in buttons or
-            self.fig.canvas.manager.toolbar.mode != '' or
+            _get_toolbar_mode(self.fig) != '' or
             not self.contains(event))
 
     def set_current_point(self, x, y, nearest=False):

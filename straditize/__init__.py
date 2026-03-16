@@ -39,4 +39,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from straditize.version import __version__
 
+
+def _ensure_psyplot_compat():
+    """Backfill symbols that older psy-strat releases still import."""
+    try:
+        import psyplot.utils as psy_utils
+    except ImportError:
+        return
+
+    if (not hasattr(psy_utils, 'DefaultOrderedDict') and
+            hasattr(psy_utils, 'Defaultdict')):
+        psy_utils.DefaultOrderedDict = psy_utils.Defaultdict
+
+
+_ensure_psyplot_compat()
+
 __author__ = "Philipp S. Sommer (philipp.sommer@unil.ch)"

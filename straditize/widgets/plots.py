@@ -142,27 +142,33 @@ class PlotControlTable(StraditizerControlBase, QTableWidget):
             A function that takes no argument and returns True if the plot can
             be made.
         """
+        def get_visible_artists():
+            return [artist for artist in get_artists() if artist is not None]
+
         def hide_or_show(checked):
             checked = checked is True or checked == Qt.Checked
-            artist = None
-            for artist in get_artists():
+            artists = get_visible_artists()
+            for artist in artists:
                 artist.set_visible(checked)
-            if artist is not None:
-                self.draw_figs(get_artists())
+            if artists:
+                self.draw_figs(artists)
 
         def trigger_plot_btn():
-            a = next(iter(get_artists()), None)
+            artists = get_visible_artists()
+            a = next(iter(artists), None)
             if a is None:
                 if can_be_plotted is None or can_be_plotted():
                     plot_func()
                     cb.setChecked(True)
                     btn.setIcon(QIcon(get_icon('invalid.png')))
                     btn.setToolTip('Remove ' + what)
-                    self.draw_figs(get_artists())
+                    artists = get_visible_artists()
+                    if artists:
+                        self.draw_figs(artists)
                     cb.setEnabled(True)
             else:
-                fig = a.axes.figure
-                figs = {a.axes.figure for a in get_artists()}
+                figs = {artist.axes.figure for artist in artists
+                        if getattr(artist, 'axes', None) is not None}
                 remove_func()
                 btn.setIcon(QIcon(get_icon('valid.png')))
                 btn.setToolTip('Show ' + what)
@@ -170,9 +176,9 @@ class PlotControlTable(StraditizerControlBase, QTableWidget):
                     fig.canvas.draw_idle()
                 cb.setEnabled(False)
 
-        self.get_artists_funcs[what] = get_artists
+        self.get_artists_funcs[what] = get_visible_artists
 
-        a = next(iter(get_artists()), None)
+        a = next(iter(get_visible_artists()), None)
 
         cb = QCheckBox()
         cb.label = what

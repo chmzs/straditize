@@ -1924,6 +1924,12 @@ class BarSplitter(QTreeWidget, StraditizerControlBase):
     #: The action in the matplotlib toolbar to go to the previous bar to split
     prev_action = None
 
+    #: The action in the matplotlib toolbar to go to the next bar to split
+    next_action = None
+
+    #: The separator in the matplotlib toolbar before the split actions
+    tb_separator = None
+
     #: A figure to show the other columns
     suggestions_fig = None
 
@@ -2102,19 +2108,22 @@ class BarSplitter(QTreeWidget, StraditizerControlBase):
 
         # plot suggestions
         if self.suggestions_fig is None:
-            import matplotlib.pyplot as plt
-            self.suggestions_fig = fig = plt.figure()
+            from straditize.straditizer import (
+                create_matplotlib_figure, should_use_headless_figure)
+            fig = create_matplotlib_figure()
+            self.suggestions_fig = fig
             fig.add_subplot('131', sharey=ax)
             fig.add_subplot('132', sharey=ax)
             fig.add_subplot('133', sharey=ax)
             for ax in fig.axes:
                 ax.callbacks.connect(
                     'xlim_changed', self.set_suggestions_fig_titles)
-            from psyplot_gui.main import mainwindow
-            if mainwindow.figures:
-                mainwindow.splitDockWidget(
-                    self.straditizer.fig.canvas.manager.window,
-                    fig.canvas.manager.window, Qt.Vertical)
+            if not should_use_headless_figure():
+                from psyplot_gui.main import mainwindow
+                if mainwindow.figures:
+                    mainwindow.splitDockWidget(
+                        self.straditizer.fig.canvas.manager.window,
+                        fig.canvas.manager.window, Qt.Vertical)
         else:
             fig = self.suggestions_fig
             for im in self.images:
@@ -2192,8 +2201,9 @@ class BarSplitter(QTreeWidget, StraditizerControlBase):
         :meth:`new_split`), RightButton deselects it (see :meth:`revert_split`)
         """
         reader = self.straditizer.data_reader
+        from straditize.straditizer import get_toolbar_mode
         if (event.inaxes != reader.ax or event.button not in [1, 3] or
-                reader.fig.canvas.manager.toolbar.mode != ''):
+                get_toolbar_mode(reader.fig) != ''):
             return
         y = int(np.floor(event.ydata - 0.5))
         extent = reader.extent or [0] * 4
@@ -2365,6 +2375,7 @@ class BarSplitter(QTreeWidget, StraditizerControlBase):
         """
         tb = self.straditizer.data_reader.ax.figure.canvas.toolbar
         if not isinstance(tb, QToolBar):
+            self.prev_action = self.next_action = self.tb_separator = None
             return
         self.tb_separator = tb.addSeparator()
         self.prev_action = tb.addAction(
@@ -2406,8 +2417,10 @@ class BarSplitter(QTreeWidget, StraditizerControlBase):
         self.expandItem(item.parent())
         self.expandItem(item)
         self.scrollToItem(item)
-        self.next_action.setEnabled(self.next_item is not None)
-        self.prev_action.setEnabled(self.previous_item is not None)
+        if self.next_action is not None:
+            self.next_action.setEnabled(self.next_item is not None)
+        if self.prev_action is not None:
+            self.prev_action.setEnabled(self.previous_item is not None)
 
     def enable_or_disable_widgets(self, b):
         if not b:
