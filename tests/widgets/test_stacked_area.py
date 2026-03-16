@@ -79,6 +79,33 @@ class StackedAreaReaderTest(bt.StraditizeWidgetsTestCase):
         # end digitizing
         QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
 
+    def test_find_samples_uses_consensus_by_default(self):
+        self.test_digitize()
+        calls = []
+        samples = pd.DataFrame([[1.5, 2.5, 3.5]], index=[10.5],
+                               columns=self.reader.full_df.columns)
+        rough = pd.DataFrame(
+            [[9, 11, 9, 11, 9, 11]],
+            index=[10.5],
+            columns=pd.MultiIndex.from_product(
+                [self.reader.full_df.columns, ['vmin', 'vmax']]))
+
+        def fail_standard(*args, **kwargs):
+            raise AssertionError('standard finder should not be used')
+
+        def fake_consensus(**kwargs):
+            calls.append(kwargs)
+            return samples.copy(), rough.copy()
+
+        self.reader.find_samples = fail_standard
+        self.reader.find_consensus_samples = fake_consensus
+
+        QTest.mouseClick(self.digitizer.btn_find_samples, Qt.LeftButton)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['pixel_tol'], self.digitizer.sp_pixel_tol.value())
+        self.assertFrameEqual(self.reader.sample_locs, samples)
+
     def test_edit_col(self):
         """Test the editing of a column"""
         self.test_digitize()
@@ -157,6 +184,23 @@ class StackedAreaConsensusTest(unittest.TestCase):
              [2.0, 4.0, 1.0]],
             index=[8.5, 11.5], columns=[0, 1, 2])
         pd.testing.assert_frame_equal(samples, expected)
+
+    def test_plot_results_overlay_uses_stacked_bands(self):
+        """Stacked overlays should draw one fill and line per layer."""
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        self.reader.all_column_starts = np.zeros(3, dtype=int)
+
+        fig = Figure()
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+
+        _, _, artists = self.reader.plot_results_overlay(
+            self.reader._full_df.iloc[:4], ax=ax, samples=False)
+
+        self.assertEqual(len(artists['fills']), 3)
+        self.assertEqual(len(artists['lines']), 3)
 
     def test_find_consensus_samples(self):
         """Consensus rows should prefer the strongest overlap and interpolate."""

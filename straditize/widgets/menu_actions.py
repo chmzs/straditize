@@ -139,9 +139,10 @@ class ExportDfDialog(QDialog):
         meta = self.stradi.valid_attrs
         if ending in ['.xls', '.xlsx']:
             with pd.ExcelWriter(fname) as writer:
-                self.df.to_excel(writer, 'Data')
+                self.df.to_excel(writer, sheet_name='Data')
                 if self.cb_include_meta.isChecked() and len(meta):
-                    meta.to_excel(writer, 'Metadata', header=False)
+                    meta.to_excel(
+                        writer, sheet_name='Metadata', header=False)
         else:
             with open(fname, 'w') as f:
                 if self.cb_include_meta.isChecked():
@@ -175,7 +176,7 @@ class ExportDfDialog(QDialog):
             height = dialog.sizeHint().height()
             # The plot creator window should cover at least one third of the
             # screen
-            dialog.resize(max(available_width, width), height)
+            dialog.resize(int(max(available_width, width)), int(height))
             if exec_:
                 dialog.exec_()
             else:

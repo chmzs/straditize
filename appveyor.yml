@@ -1,11 +1,11 @@
 environment:
     matrix:
-        - PYTHON: "C:\\Miniconda36-x64"
+        - PYTHON: "C:\\Miniforge-x64"
           PYTHON_ARCH: "64"
-          PYTHON_VERSION: 3.7
-        - PYTHON: "C:\\Miniconda36-x64"
+          PYTHON_VERSION: 3.10
+        - PYTHON: "C:\\Miniforge-x64"
           PYTHON_ARCH: "64"
-          PYTHON_VERSION: 3.6
+          PYTHON_VERSION: 3.12
 
 install:
     # windows config (for installation)
@@ -15,9 +15,6 @@ install:
     # conda config
     - conda config --set always_yes yes --set changeps1 no
     - conda config --add channels conda-forge
-    - conda config --add channels chilipp
-    - conda config --add channels chilipp/label/master
-    - conda config --add channels chilipp/label/dev
     - conda update -q conda
     - conda install conda-build anaconda-client
     - conda info -a

@@ -20,7 +20,9 @@ from itertools import chain
 import numpy as np
 import pandas as pd
 from functools import partial
-from straditize.binary import DataReader, readers
+from straditize.binary import (
+    DataReader, readers, result_overlay_color, RESULT_OVERLAY_FILL_ALPHA,
+    RESULT_OVERLAY_LINE_ALPHA, RESULT_OVERLAY_LINEWIDTH)
 from straditize.widgets import StraditizerControlBase, get_straditizer_widgets
 import skimage.morphology as skim
 from psyplot_gui.compat.qtcompat import (
@@ -183,7 +185,7 @@ class StackedReader(DataReader, StraditizerControlBase):
             axis=1)
         x = np.meshgrid(*map(np.arange, image.shape[::-1]))[0]
         image[(x < start[:, np.newaxis]) | (x > all_end[:, np.newaxis])] = 0
-        labels = skim.label(image, 8)
+        labels = skim.label(image, connectivity=2)
         self.straditizer_widgets.selection_toolbar.data_obj = self
         self.apply_button.clicked.connect(
             self.add_col if add_on_apply else self.update_col)
@@ -251,7 +253,7 @@ class StackedReader(DataReader, StraditizerControlBase):
     def add_col(self):
         """Create a column out of the current selection"""
         def increase_col_nums(df):
-            df_cols = df.columns.values
+            df_cols = np.asarray(df.columns, dtype=int).copy()
             df_cols[df_cols >= current] += 1
             df.columns = df_cols
         current = self._current_col
@@ -318,6 +320,31 @@ class StackedReader(DataReader, StraditizerControlBase):
         for i in range(vals.shape[1]):
             x += vals[:, i]
             lines.extend(ax.plot(x.copy(), y, lw=2.0))
+
+    def _plot_results_overlay_df(self, df, ax, samples=False,
+                                 column_numbers=None, color_map=None):
+        """Plot stacked layers as semi-transparent bands on the source image."""
+        column_numbers = column_numbers or self._overlay_column_numbers(df)
+        color_map = color_map or {
+            col: result_overlay_color(col)
+            for col in column_numbers}
+        artists = {'fills': [], 'lines': []}
+        y = self._overlay_ycoords(df)
+        start = np.zeros(len(df), dtype=float) + self._overlay_starts(
+            [column_numbers[0]])[0]
+
+        for col_num, label in zip(column_numbers, df.columns):
+            values = self._overlay_values(df.loc[:, label].values)
+            color = color_map[col_num]
+            artists['fills'].append(ax.fill_betweenx(
+                y, start, start + values, color=color,
+                alpha=RESULT_OVERLAY_FILL_ALPHA, zorder=2))
+            artists['lines'].append(ax.plot(
+                start + values, y, color=color,
+                alpha=RESULT_OVERLAY_LINE_ALPHA,
+                lw=RESULT_OVERLAY_LINEWIDTH, zorder=3)[0])
+            start = start + np.nan_to_num(values, nan=0.0)
+        return artists
 
     def plot_potential_samples(self, excluded=False, ax=None, plot_kws={},
                                *args, **kwargs):

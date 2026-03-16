@@ -30,7 +30,7 @@ from psyplot_gui.compat.qtcompat import (
     QPushButton, Qt, QMenu, QCheckBox, QTableView)
 from psyplot_gui.common import DockMixin, PyErrorMessage
 from psyplot_gui.dataframeeditor import DataFrameDock, FrozenTableView
-from straditize.common import docstrings
+from straditize.common import docstrings, nearest_index_position
 from collections import defaultdict
 
 
@@ -728,7 +728,7 @@ class MultiCrossMarksView(QTableView):
                 continue
             mark = model.get_cell_mark(row, col)
             old_pos = mark.pos
-            xa = df.loc[df.index.get_loc(mark.y, method='nearest')].iloc[col-1]
+            xa = df.iloc[nearest_index_position(df.index, mark.y)].iloc[col-1]
             if np.isnan(xa):
                 xa = 0
             mark.set_pos((xa, mark.ya))
@@ -840,8 +840,8 @@ class SingleCrossMarksView(MultiCrossMarksView):
             mark = model.get_cell_mark(row, col)
             xa = mark.xa
             old_pos = mark.pos
-            x = df.loc[
-                df.index.get_loc(mark.y - y0, method='nearest')].iloc[col-1]
+            x = df.iloc[
+                nearest_index_position(df.index, mark.y - y0)].iloc[col-1]
             if np.isnan(x):
                 x = 0
             xa[col - 1] = x + starts[col - 1]
@@ -1042,7 +1042,7 @@ class MultiCrossMarksEditor(DockMixin, QWidget):
                 continue
             mark = model.get_cell_mark(row, col)
             old_pos = mark.pos
-            xa = data[col - 1]
+            xa = data.iloc[col - 1]
             if np.isnan(xa):
                 xa = 0
             mark.set_pos((xa, mark.ya))
@@ -1136,7 +1136,7 @@ class SingleCrossMarksEditor(MultiCrossMarksEditor):
                 continue
             mark = model.get_cell_mark(row, col)
             old_pos = mark.pos
-            x = data[col - 1]
+            x = data.iloc[col - 1]
             if np.isnan(x):
                 x = 0
             xa = mark.xa
