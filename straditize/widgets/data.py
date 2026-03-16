@@ -1490,7 +1490,7 @@ class DigitizingControl(StraditizerControlBase):
             df = pd.read_excel(fname, index_col=0)
         else:
             df = pd.read_csv(fname, index_col=0)
-        samples = df.index.values
+        samples = np.array(df.index.values, copy=True)
         try:
             samples = self.straditizer.data2px_y(samples)
         except ValueError:

@@ -484,9 +484,11 @@ class DataReader(LabelSelection):
         if np.ndim(image) == 2:
             if binary is None:
                 self.binary = np.asarray(image, dtype=np.int8)
-            image = np.tile(
-                image[..., np.newaxis].astype(np.int8), (1, 1, 4)) * 255
-            image[..., -1] = 255
+            rgba = np.tile(
+                np.asarray(image, dtype=np.uint8)[..., np.newaxis], (1, 1, 4))
+            rgba[..., :-1] *= 255
+            rgba[..., -1] = 255
+            image = rgba
         elif binary is None:
                 self.binary = self.to_binary_pil(image)
 
@@ -1981,7 +1983,7 @@ class DataReader(LabelSelection):
                 fraction=fraction, absolute=absolute, inplace=inplace,
                 return_mask=return_mask)
         if inplace:
-            non_exag = self.full_df.values
+            non_exag = self.full_df.values.copy()
         else:
             non_exag = self.full_df.values.copy()
         new_vals = self.digitize(inplace=False).values

@@ -314,6 +314,19 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
 
         self.assertEqual(reader.vline_locs.tolist(), [1])
 
+    def test_init_2d_int8_image_without_overflow(self):
+        """2D int8 masks should still become an RGBA preview image."""
+        image = np.ones((3, 3), dtype=np.int8)
+
+        reader = binary.DataReader(image, plot=False)
+
+        rgba = np.asarray(reader.image)
+        self.assertEqual(rgba.dtype, np.uint8)
+        self.assertEqual(rgba.shape, (3, 3, 4))
+        self.assertTrue(np.all(rgba[..., :-1] == 255))
+        self.assertTrue(np.all(rgba[..., -1] == 255))
+        self.assertTrue(np.array_equal(reader.binary, image))
+
     def test_plot_results_uses_headless_figure_helper(self):
         """Headless plot rendering should avoid pyplot figure managers."""
         from matplotlib.backends.backend_agg import FigureCanvasAgg

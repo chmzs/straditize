@@ -1042,7 +1042,7 @@ class MultiCrossMarksEditor(DockMixin, QWidget):
                 continue
             mark = model.get_cell_mark(row, col)
             old_pos = mark.pos
-            xa = data[col - 1]
+            xa = data.iloc[col - 1]
             if np.isnan(xa):
                 xa = 0
             mark.set_pos((xa, mark.ya))
@@ -1136,7 +1136,7 @@ class SingleCrossMarksEditor(MultiCrossMarksEditor):
                 continue
             mark = model.get_cell_mark(row, col)
             old_pos = mark.pos
-            x = data[col - 1]
+            x = data.iloc[col - 1]
             if np.isnan(x):
                 x = 0
             xa = mark.xa
