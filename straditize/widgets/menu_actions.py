@@ -45,7 +45,7 @@ _updating = []
 class ExportDfDialog(QDialog):
     """A QDialog to export a :class:`pandas.DataFrame` to Excel or CSV"""
 
-    @docstrings.get_sectionsf('ExportDfDialog')
+    @docstrings.get_sections(base='ExportDfDialog')
     def __init__(self, df, straditizer, fname=None, *args, **kwargs):
         """
         Parameters
@@ -375,7 +375,7 @@ class StraditizerMenuActions(StraditizerControlBase):
                 return osp.splitext(current)[0]
         return os.getcwd()
 
-    @docstrings.get_sectionsf('StraditizerMenuActions._open_image')
+    @docstrings.get_sections(base='StraditizerMenuActions._open_image')
     def _open_image(self, fname=None):
         """Open an image file
 
@@ -835,7 +835,7 @@ class StraditizerMenuActions(StraditizerControlBase):
             encoding = self._dataset_netcdf_encoding(ds)
             ds.to_netcdf(fname, encoding=encoding, engine='netcdf4')
 
-    @docstrings.get_sectionsf('StraditizerMenuActions._save_image')
+    @docstrings.get_sections(base='StraditizerMenuActions._save_image')
     def _save_image(self, image, fname=None):
         """Save an image to a file
 
@@ -928,7 +928,7 @@ class StraditizerMenuActions(StraditizerControlBase):
                 'from %s import straditizer as stradi' % __name__)
         straditizer = None
 
-    @docstrings.get_sectionsf('StraditizerMenuActions._export_df')
+    @docstrings.get_sections(base='StraditizerMenuActions._export_df')
     def _export_df(self, df, fname=None):
         """Export a data frame to a file
 

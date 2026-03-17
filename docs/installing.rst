@@ -7,9 +7,9 @@ Installation
 
 How to install
 --------------
-You can either install straditize through a package manager such as
-:ref:`conda <install-conda>` or :ref:`pip <install-pip>` or install it
-:ref:`from source <install-source>`.
+For the refreshed ``0.2`` line, the maintained path is to install straditize
+from a source checkout inside an isolated environment. The recommended options
+below differ only in how the environment itself is created.
 
 .. _install-conda:
 
@@ -35,8 +35,8 @@ In the same terminal, now type ``straditize`` to start the software.
 
 .. _install-pip:
 
-Installation using pip
-^^^^^^^^^^^^^^^^^^^^^^
+Installation using ``venv`` + pip
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 If you already manage isolated environments with ``venv`` or another Python
 tool, first install the validated dependency stack and then install straditize
 from source::
@@ -49,22 +49,6 @@ from source::
     $ pip install -e .
 
 To open the software, type ``straditize`` in the same terminal.
-
-.. _install-source:
-
-Installation from source
-^^^^^^^^^^^^^^^^^^^^^^^^
-To install it from source, make sure you have the :ref:`dependencies`
-installed. Download (or clone) the github_ repository, e.g. via::
-
-    git clone https://github.com/Chilipp/straditize.git
-
-and install it via::
-
-    pip install -e .
-
-from your terminal. To open the software, type ``straditize`` in the same
-terminal.
 
 .. _dependencies:
 
@@ -130,7 +114,9 @@ Alternatively you can build the recipe in the `conda-recipe` directory via
 
     $ conda build conda-recipe
 
-which will also run the test suite.
+which will also run the test suite. The recipe is kept for release and
+compatibility work, but it is not the primary end-user installation path for
+``0.2``.
 
 .. warning::
 
@@ -187,40 +173,19 @@ Updating straditize
 
 Updating the software depends on how you installed it on your system.
 
-.. _update-conda:
-
-Updating via conda
-^^^^^^^^^^^^^^^^^^
-If you installed straditize via conda (see :ref:`install-conda`), you can
-update it via::
-
-    $ conda update -c chilipp straditize
-
-.. _update-pip:
-
-Updating via pip
-^^^^^^^^^^^^^^^^
-If you installed it via ``pip`` (see :ref:`install-pip`), you can update it
-via::
-
-    $ pip install -U straditize
-
-.. _update-source:
-
-Updating from source files
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-If you installed it from a source checkout (see :ref:`install-source`), pull
-the latest version from github_ and run ``pip install -e .`` again.
+Updating from a source checkout
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Pull the latest version from github_ in your checkout and run
+``pip install -e .`` again inside the same environment.
 
 
 .. _uninstall:
 
 Uninstallation
 --------------
-The uninstallation depends on the system you used to install straditize. Either
-you did it via :ref:`conda <install-conda>` (see :ref:`uninstall-conda`), via
-:ref:`pip <install-pip>` or from the
-:ref:`source files <install-source>` (see :ref:`uninstall-pip`).
+The uninstallation depends on the environment you used for the source install.
+In practice this means either removing the whole dedicated environment or
+uninstalling the editable package from it.
 
 Anyway, if you may want to remove the psyplot configuration files. If you did
 not specify anything else (see :func:`psyplot.config.rcsetup.psyplot_fname`),
@@ -228,21 +193,10 @@ the configuration files for psyplot are located in the user home directory.
 Under linux and OSX, this is ``$HOME/.config/psyplot``. On other platforms it
 is in the ``.psyplot`` directory in the user home.
 
-.. _uninstall-conda:
-
-Uninstallation via conda
-^^^^^^^^^^^^^^^^^^^^^^^^
-If you installed straditize via :ref:`conda <install-conda>`, simply run::
-
-    conda uninstall straditize
-
 .. _uninstall-pip:
 
-Uninstallation via pip
-^^^^^^^^^^^^^^^^^^^^^^
-Uninstalling via pip simply goes via::
+Uninstallation from the active environment
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Uninstalling the editable package goes via::
 
     pip uninstall straditize
-
-Note, however, that you should use :ref:`conda <uninstall-conda>` if you also
-installed it via conda.

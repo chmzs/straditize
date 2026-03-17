@@ -10,10 +10,8 @@ Digitizing stratigraphic diagrams
 
     * - docs
       - |docs|
-    * - tests
-      - |travis| |appveyor| |codecov|
     * - package
-      - |version| |conda| |joss| |github|
+      - |version| |joss| |github|
     * - implementations
       - |supported-versions| |supported-implementations|
 
@@ -21,25 +19,9 @@ Digitizing stratigraphic diagrams
     :alt: Documentation Status
     :target: http://straditize.readthedocs.io/en/latest/?badge=latest
 
-.. |travis| image:: https://travis-ci.org/Chilipp/straditize.svg?branch=master
-    :alt: Travis
-    :target: https://travis-ci.org/Chilipp/straditize
-
-.. |appveyor| image:: https://ci.appveyor.com/api/projects/status/c1c8pqvh8h8rolxw?svg=true
-    :alt: AppVeyor
-    :target: https://ci.appveyor.com/project/Chilipp/straditize/branch/master
-
-.. |codecov| image:: https://codecov.io/gh/Chilipp/straditize/branch/master/graph/badge.svg
-    :alt: Coverage
-    :target: https://codecov.io/gh/Chilipp/straditize
-
 .. |version| image:: https://img.shields.io/pypi/v/straditize.svg?style=flat
     :alt: PyPI Package latest release
     :target: https://pypi.python.org/pypi/straditize
-
-.. |conda| image:: https://anaconda.org/conda-forge/straditize/badges/version.svg
-    :alt: conda
-    :target: https://anaconda.org/conda-forge/straditize
 
 .. |supported-versions| image:: https://img.shields.io/pypi/pyversions/straditize.svg?style=flat
     :alt: Supported versions
@@ -99,9 +81,8 @@ Highlights in 0.2
 Installation
 ------------
 
-We recommend installing straditize into its own isolated environment. The most
-reliable path for ``0.2`` is to install from a source checkout so the tested
-dependency stack is explicit.
+We recommend installing straditize into its own isolated environment from a
+source checkout so the tested dependency stack is explicit.
 
 Recommended source install with ``pixi``::
 
@@ -112,7 +93,7 @@ Recommended source install with ``pixi``::
     pixi run pip install -e .
     pixi run straditize
 
-Recommended source install with ``mamba``/``conda``::
+Alternative source install with ``mamba``/``conda``::
 
     git clone https://github.com/Chilipp/straditize.git
     cd straditize

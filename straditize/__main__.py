@@ -18,10 +18,10 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>."""
 import sys
-from psyplot_gui import docstrings
 import os
 import os.path as osp
 from straditize.common import (
+    configure_runtime_warning_filters,
     configure_qt_opengl,
     ensure_asyncio_event_loop,
     patch_psyplot_gui_common,
@@ -31,6 +31,10 @@ from straditize.common import (
     patch_psyplot_gui_opengl,
 )
 from straditize.version import __version__
+from psyplot_gui import docstrings
+
+
+configure_runtime_warning_filters()
 
 
 docstrings.delete_params('psyplot_gui.start_app.parameters', 'fnames',

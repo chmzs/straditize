@@ -1,3 +1,23 @@
+v0.2.1
+======
+
+This hotfix release keeps the refreshed ``0.2`` runtime stack but trims
+release housekeeping that was no longer maintained.
+
+Changed
+-------
+* README and docs installation guidance now describe the maintained
+  source-install workflow more clearly and avoid contradictory legacy paths.
+* Release-facing badges and references no longer point to retired Travis and
+  AppVeyor infrastructure.
+
+Removed
+-------
+* Obsolete Travis CI and AppVeyor configuration files from the active release
+  branch.
+* Local virtual-environment clutter is now explicitly ignored in development
+  checkouts.
+
 v0.2
 ====
 

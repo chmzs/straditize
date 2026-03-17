@@ -1370,14 +1370,14 @@ class DigitizingControl(StraditizerControlBase):
         Parameters
         ----------
         s: str
-            A string matching ``'Columns (\d.*)'``, where the numbers are the
+            A string matching ``'Columns (\\d.*)'``, where the numbers are the
             columns of the reader to use"""
         if not self._change_reader:
             return
-        match = re.search('Columns (\d.*)', txt)
+        match = re.search(r'Columns (\d.*)', txt)
         if not match:
             return
-        cols = set(map(int, re.findall('\d+', match.group(1))))
+        cols = set(map(int, re.findall(r'\d+', match.group(1))))
         old = self.straditizer.data_reader
         children = chain([old], old.children)
         filter_func = filter if txt.startswith('exag') else filterfalse
@@ -2227,7 +2227,7 @@ class BarSplitter(QTreeWidget, StraditizerControlBase):
         elif self.selected_child.childCount():
             self.revert_split(y, y0)
 
-    @docstrings.get_sectionsf('BarSplitter.new_split')
+    @docstrings.get_sections(base='BarSplitter.new_split')
     def new_split(self, y, y0, draw_figure=True):
         """Mark the current item to be splitted at `y`
 

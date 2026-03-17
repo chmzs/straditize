@@ -20,11 +20,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 import asyncio
 import logging
+import os
+import warnings
 from functools import wraps
 
 from docrep import DocstringProcessor
 
 docstrings = DocstringProcessor()
+
+
+def configure_runtime_warning_filters():
+    """Silence narrow third-party deprecations that straditize cannot fix."""
+    os.environ.setdefault('JUPYTER_PLATFORM_DIRS', '1')
+    warnings.filterwarnings(
+        'ignore',
+        message='Jupyter is migrating its paths to use standard platformdirs.*',
+        category=DeprecationWarning,
+        module=r'jupyter_client\.connect')
+    warnings.filterwarnings(
+        'ignore',
+        message='zmq\\.eventloop\\.ioloop is deprecated in pyzmq 17.*',
+        category=DeprecationWarning)
 
 
 def rgba2rgb(image, color=(255, 255, 255)):

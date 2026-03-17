@@ -120,7 +120,7 @@ class EnableButton(QPushButton):
 class InfoButton(QToolButton):
     """A button to display help informations in the help explorer"""
 
-    @docstrings.get_sectionsf('InfoButton')
+    @docstrings.get_sections(base='InfoButton')
     def __init__(self, parent, fname=None, rst=None, name=None):
         """
         Parameters
@@ -637,7 +637,7 @@ class StraditizerWidgets(QWidget, DockMixin):
 
     docstrings.delete_params('InfoButton.parameters', 'parent')
 
-    @docstrings.get_sectionsf('StraditizerWidgets.add_info_button')
+    @docstrings.get_sections(base='StraditizerWidgets.add_info_button')
     @docstrings.with_indent(8)
     def add_info_button(self, child, fname=None, rst=None, name=None,
                         connections=[]):
@@ -803,7 +803,7 @@ class StraditizerControlBase(object):
         """The cancel button of the :attr:`straditizer_widgets`"""
         return self.straditizer_widgets.cancel_button
 
-    @docstrings.get_sectionsf('StraditizerControlBase.init_straditizercontrol')
+    @docstrings.get_sections(base='StraditizerControlBase.init_straditizercontrol')
     def init_straditizercontrol(self, straditizer_widgets, item=None):
         """Initialize the straditizer control widget
 

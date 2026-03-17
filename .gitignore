@@ -89,3 +89,4 @@ paper/paper.pdf
 
 # local git worktrees
 .worktrees/
+.venvs/
