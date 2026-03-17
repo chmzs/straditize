@@ -62,7 +62,7 @@ class MultiCrossMarksModel(QtCore.QAbstractTableModel):
     #: and plots a reconstruction based on them
     lines = []
 
-    @docstrings.get_sectionsf('MultiCrossMarksModel')
+    @docstrings.get_sections(base='MultiCrossMarksModel')
     def __init__(self, marks, columns, straditizer, axes=None,
                  occurences_value=-9999):
         """
@@ -376,7 +376,7 @@ class SingleCrossMarksModel(MultiCrossMarksModel):
     #: :class:`straditize.cross_mark.CrossMarks` instance
     marks = []
 
-    @docstrings.get_sectionsf('SingleCrossMarksModel')
+    @docstrings.get_sections(base='SingleCrossMarksModel')
     @docstrings.dedent
     def __init__(self, *args, **kwargs):
         """

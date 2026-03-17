@@ -186,7 +186,7 @@ class CrossMarks(object):
     #: the list of vertical lines
     vlines = []
 
-    @docstrings.get_sectionsf('CrossMarks')
+    @docstrings.get_sections(base='CrossMarks')
     @docstrings.dedent
     def __init__(self, pos=(0, 0), ax=None, selectable=['h', 'v'],
                  draggable=['h', 'v'], idx_h=None, idx_v=None,
@@ -899,7 +899,7 @@ class DraggableHLine(CrossMarks):
     docstrings.delete_params('CrossMarks.parameters', 'pos', 'ax',
                              'selectable', 'draggable')
 
-    @docstrings.get_sectionsf('DraggableHLine')
+    @docstrings.get_sections(base='DraggableHLine')
     @docstrings.dedent
     def __init__(self, y, ax=None, *args, **kwargs):
         """
@@ -946,7 +946,7 @@ class DraggableVLine(CrossMarks):
 
     hide_horizontal = True
 
-    @docstrings.get_sectionsf('DraggableVLine')
+    @docstrings.get_sections(base='DraggableVLine')
     @docstrings.dedent
     def __init__(self, x, ax=None, *args, **kwargs):
         """
@@ -1001,7 +1001,7 @@ class CrossMarkText(CrossMarks):
     #: The value of this cross mark
     value = None
 
-    @docstrings.get_sectionsf('CrossMarkText')
+    @docstrings.get_sections(base='CrossMarkText')
     @docstrings.dedent
     def __init__(self, *args, **kwargs):
         """

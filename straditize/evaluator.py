@@ -13,7 +13,7 @@ from psy_strat.stratplot import stratplot
 from itertools import filterfalse
 
 
-docstrings.get_sectionsf('stratplot')(stratplot)
+docstrings.get_sections(base='stratplot')(stratplot)
 
 
 def rmse(sim, ref):

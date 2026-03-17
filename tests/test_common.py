@@ -1,13 +1,17 @@
 """Tests for shared helpers."""
 import asyncio
+import os
+import subprocess
 import sys
 import types
 import unittest
 from unittest import mock
+import warnings
 
 import pandas as pd
 
 from straditize.common import (
+    configure_runtime_warning_filters,
     configure_qt_opengl,
     ensure_asyncio_event_loop,
     ensure_qt_int,
@@ -30,6 +34,14 @@ class CommonHelpersTest(unittest.TestCase):
         index = pd.Index([0.0, 4.0, 9.0, 15.0])
 
         self.assertEqual(nearest_index_value(index, 13.0), 15.0)
+
+    def test_configure_runtime_warning_filters_sets_platformdirs(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                configure_runtime_warning_filters()
+
+        self.assertEqual(os.environ['JUPYTER_PLATFORM_DIRS'], '1')
 
     def test_ensure_asyncio_event_loop_sets_missing_loop(self):
         sentinel = object()
@@ -177,6 +189,24 @@ class CommonHelpersTest(unittest.TestCase):
 
         self.assertEqual(len(plugins), 1)
         self.assertEqual(plugins[0].module, 'keep.module')
+
+    def test_imports_avoid_deprecation_and_syntax_warnings(self):
+        env = dict(os.environ)
+        env['PYTHONWARNINGS'] = 'error::DeprecationWarning,error::SyntaxWarning'
+        cmd = [
+            sys.executable,
+            '-c',
+            ('import straditize.binary; import straditize.cross_mark; '
+             'import straditize.widgets.data; import straditize.widgets.menu_actions; '
+             'import straditize.colnames; import straditize.__main__')
+        ]
+        completed = subprocess.run(
+            cmd, capture_output=True, text=True, env=env, check=False)
+
+        self.assertEqual(
+            completed.returncode, 0,
+            msg='stdout:\n%s\nstderr:\n%s' % (
+                completed.stdout, completed.stderr))
 
 
 if __name__ == '__main__':

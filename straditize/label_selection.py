@@ -280,7 +280,7 @@ class LabelSelection(object):
             self._select_img.set_norm(mcol.BoundaryNorm(bounds, len(bounds)-1))
             self._update_magni_img()
 
-    @docstrings.get_sectionsf('LabelSelection.enable_label_selection')
+    @docstrings.get_sections(base='LabelSelection.enable_label_selection')
     def enable_label_selection(self, arr, ncolors, img=None,
                                set_picker=False, **kwargs):
         """Start the selection of labels

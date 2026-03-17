@@ -192,7 +192,7 @@ class DataReader(LabelSelection):
         ``ncols * 2`` columns, where ``ncols`` is the number of columns
         in the :attr:`sample_locs`.
 
-        If the potential sample :attr:`sample_locs`\ ``.iloc[i, col]`` ranges
+        If the potential sample :attr:`sample_locs`\\ ``.iloc[i, col]`` ranges
         ``j`` to ``k`` (see the :meth:`find_potential_samples` method), the
         cell at ``rough_locs.iloc[i, col * 2]`` specifies the first y-pixel
         (``j``) and ``rough_locs.iloc[i, col * 2 + 1]`` the last y-pixel (+1),
@@ -211,7 +211,7 @@ class DataReader(LabelSelection):
         ``ncols * 2`` columns, where ``ncols`` is the number of columns
         in the :attr:`sample_locs`.
 
-        If the potential sample :attr:`sample_locs`\ ``.iloc[i, col]`` ranges
+        If the potential sample :attr:`sample_locs`\\ ``.iloc[i, col]`` ranges
         ``j`` to ``k`` (see the :meth:`find_potential_samples` method), the
         cell at ``rough_locs.iloc[i, col * 2]`` specifies the first y-pixel
         (``j``) and ``rough_locs.iloc[i, col * 2 + 1]`` the last y-pixel (+1),
@@ -460,7 +460,7 @@ class DataReader(LabelSelection):
 
     label_arrs = ['binary', 'labels', 'image_array']
 
-    @docstrings.get_sectionsf('DataReader')
+    @docstrings.get_sections(base='DataReader')
     def __init__(self, image, ax=None, extent=None,
                  plot=True, children=[], parent=None, magni=None,
                  plot_background=False, binary=None):
@@ -1394,7 +1394,7 @@ class DataReader(LabelSelection):
         mask = (np.r_[ret[1:], binary.shape[1]] - ret) > min_diff
         return ret[mask]
 
-    @docstrings.get_sectionsf('DataReader._filter_lines')
+    @docstrings.get_sections(base='DataReader._filter_lines')
     def _filter_lines(self, locs, min_lw=1, max_lw=None):
         """Filter consecutive locations based on their length
 
@@ -1909,7 +1909,7 @@ class DataReader(LabelSelection):
         return np.vstack([self.all_column_starts,
                           self.all_column_ends]).T
 
-    @docstrings.get_sectionsf('DataReader.digitize')
+    @docstrings.get_sections(base='DataReader.digitize')
     def digitize(self, use_sum=False, inplace=True):
         """Digitize the binary image to create the full dataframe
 
@@ -2087,7 +2087,7 @@ class DataReader(LabelSelection):
         return np.where(coord == self.occurences_value, self.occurences_value,
                         intercept + slope * coord)
 
-    @docstrings.get_sectionsf('DataReader._plot_df')
+    @docstrings.get_sections(base='DataReader._plot_df')
     def _plot_df(self, df, ax=None, *args, **kwargs):
         """Plot a data frame as line plot in the diagram
 
@@ -2393,7 +2393,7 @@ class DataReader(LabelSelection):
         intercept = y[0] - slope * x[0]
         return intercept, slope
 
-    @docstrings.get_sectionsf('DataReader.find_potential_samples',
+    @docstrings.get_sections(base='DataReader.find_potential_samples',
                               sections=['Parameters', 'Returns'])
     def find_potential_samples(self, col, min_len=None,
                                max_len=None, filter_func=None):
@@ -2560,7 +2560,7 @@ class DataReader(LabelSelection):
     docstrings.delete_params('DataReader.find_potential_samples.parameters',
                              'col')
 
-    @docstrings.get_sectionsf('DataReader.plot_potential_samples')
+    @docstrings.get_sections(base='DataReader.plot_potential_samples')
     @docstrings.with_indent(8)
     def plot_potential_samples(
             self, excluded=False, ax=None, plot_kws={}, *args, **kwargs):
@@ -2663,7 +2663,7 @@ class DataReader(LabelSelection):
                      if not child.is_exaggerated and col in child.columns),
                     None)
 
-    @docstrings.get_sectionsf('DataReader.unique_bars')
+    @docstrings.get_sections(base='DataReader.unique_bars')
     @docstrings.dedent
     def unique_bars(self, min_fract=None, asdict=True, *args, **kwargs):
         """
@@ -2721,7 +2721,7 @@ class DataReader(LabelSelection):
     docstrings.delete_params(
         'DataReader.find_potential_samples.parameters', 'col')
 
-    @docstrings.get_sectionsf('DataReader.find_samples',
+    @docstrings.get_sections(base='DataReader.find_samples',
                               sections=['Parameters', 'Returns'])
     @docstrings.dedent
     @only_parent
@@ -2966,7 +2966,7 @@ class DataReader(LabelSelection):
         new = self._full_df.loc[samples]
         self.sample_locs = new.combine_first(df)
 
-    @docstrings.get_sectionsf('DataReader.get_disconnected_parts')
+    @docstrings.get_sections(base='DataReader.get_disconnected_parts')
     def get_disconnected_parts(self, fromlast=5, from0=10,
                                cross_column=False):
         """Identify parts in the :attr:`binary` data that are not connected
@@ -3064,7 +3064,7 @@ class DataReader(LabelSelection):
     docstrings.delete_params(
         'LabelSelection.enable_label_selection.parameters', 'arr', 'ncolors')
 
-    @docstrings.get_sectionsf('DataReader._show_parts2remove')
+    @docstrings.get_sections(base='DataReader._show_parts2remove')
     @docstrings.with_indent(8)
     def _show_parts2remove(self, arr, remove=False, select_all=True,
                            selection=None, **kwargs):
@@ -3154,7 +3154,7 @@ class DataReader(LabelSelection):
         return skim.label(binary, connectivity=2, return_num=False)
 
     @only_parent
-    @docstrings.get_sectionsf('DataReader.get_cross_column_features')
+    @docstrings.get_sections(base='DataReader.get_cross_column_features')
     def get_cross_column_features(self, min_px=50):
         """Get features that are contained in two or more columns
 
@@ -3207,7 +3207,7 @@ class DataReader(LabelSelection):
         mask = arr & (~skim.remove_small_objects(arr, n))
         self._show_parts2remove(mask.astype(int), remove, **kwargs)
 
-    @docstrings.get_sectionsf('DataReader.get_parts_at_column_ends')
+    @docstrings.get_sections(base='DataReader.get_parts_at_column_ends')
     def get_parts_at_column_ends(self, npixels=2):
         """Identify parts in the :attr:`binary` data that touch the next column
 
@@ -3370,7 +3370,7 @@ class DataReader(LabelSelection):
             ax0.invert_yaxis()
         return sp, groupers
 
-    @docstrings.get_sectionsf('DataReader.get_bbox_for_cols')
+    @docstrings.get_sections(base='DataReader.get_bbox_for_cols')
     def get_bbox_for_cols(self, columns, x0, y0, width, height):
         """Get the boundary boxes for the columns of this reader in the results
         plot
@@ -3690,7 +3690,7 @@ class BarDataReader(DataReader):
 
         return ret
 
-    @docstrings.get_sectionsf('BarDataReader.get_bars')
+    @docstrings.get_sections(base='BarDataReader.get_bars')
     def get_bars(self, arr, do_split=False):
         """Find the distinct bars in an array
 
