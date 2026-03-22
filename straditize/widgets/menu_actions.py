@@ -28,8 +28,8 @@ from straditize.widgets import StraditizerControlBase
 from straditize.common import rgba2rgb, docstrings
 from psyplot_gui.compat.qtcompat import (
     with_qt5, QFileDialog, QMenu, QKeySequence, QDialog, QDialogButtonBox,
-    QLineEdit, QToolButton, QIcon, QCheckBox, QHBoxLayout, QVBoxLayout, QLabel,
-    QDesktopWidget, QTreeWidgetItem, Qt, QMessageBox)
+    QLineEdit, QToolButton, QIcon, QCheckBox, QComboBox, QHBoxLayout,
+    QVBoxLayout, QLabel, QDesktopWidget, QTreeWidgetItem, Qt, QMessageBox)
 from PyQt5 import QtWidgets
 from psyplot_gui.common import get_icon
 import numpy as np
@@ -45,6 +45,12 @@ _updating = []
 class ExportDfDialog(QDialog):
     """A QDialog to export a :class:`pandas.DataFrame` to Excel or CSV"""
 
+    RESOLUTION_PRESETS = {
+        'Fine': 1000,
+        'Medium': 500,
+        'Coarse': 200,
+    }
+
     @docstrings.get_sections(base='ExportDfDialog')
     def __init__(self, df, straditizer, fname=None, *args, **kwargs):
         """
@@ -58,7 +64,7 @@ class ExportDfDialog(QDialog):
             The file name to export to
         """
         super().__init__(*args, **kwargs)
-        self.df = df
+        self.df = df if df is not None else pd.DataFrame()
         self.stradi = straditizer
         self.txt_fname = QLineEdit()
         self.bt_open_file = QToolButton()
@@ -67,6 +73,23 @@ class ExportDfDialog(QDialog):
 
         self.cb_include_meta = QCheckBox('Include meta data')
         self.cb_include_meta.setChecked(True)
+
+        self.cb_mode = QComboBox()
+        self.cb_mode.addItems(
+            ['Original', 'Linear interpolation', 'Bin mean',
+             'Sliding bin mean'])
+        self.cb_resolution = QComboBox()
+        self.cb_resolution.addItems(['Fine', 'Medium', 'Coarse'])
+        self.cb_resolution.setCurrentText('Medium')
+
+        self.txt_index_name = QLineEdit()
+        self._source_index_name = self.df.index.name
+        self._suggested_index_name = self._infer_default_index_name(self.df)
+        if self._source_index_name is not None:
+            self.txt_index_name.setText(str(self._source_index_name))
+        else:
+            self.txt_index_name.setText(self._suggested_index_name)
+        self._index_name_edited = False
 
         self.bbox = bbox = QDialogButtonBox(QDialogButtonBox.Ok |
                                             QDialogButtonBox.Cancel)
@@ -82,6 +105,21 @@ class ExportDfDialog(QDialog):
         hbox.addWidget(self.bt_open_file)
         vbox.addLayout(hbox)
 
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel('Mode:'))
+        hbox.addWidget(self.cb_mode)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel('Resolution:'))
+        hbox.addWidget(self.cb_resolution)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel('First column name:'))
+        hbox.addWidget(self.txt_index_name)
+        vbox.addLayout(hbox)
+
         vbox.addWidget(self.cb_include_meta)
 
         vbox.addWidget(bbox)
@@ -93,10 +131,130 @@ class ExportDfDialog(QDialog):
         bbox.accepted.connect(self._export)
         bbox.rejected.connect(self.reject)
         self.bt_open_file.clicked.connect(self.get_open_file_name)
+        self.cb_mode.currentTextChanged.connect(self._toggle_resolution_state)
+        self.txt_index_name.textEdited.connect(self._mark_index_name_edited)
+        self._toggle_resolution_state(self.cb_mode.currentText())
 
         if fname is not None:
             self.txt_fname.setText(fname)
             self._export()
+
+    @staticmethod
+    def _ensure_monotonic_numeric_index(df):
+        ret = df.copy()
+        try:
+            index = np.asarray(ret.index.values, dtype=float)
+        except (TypeError, ValueError):
+            return ret, None
+        order = np.argsort(index)
+        index_sorted = index[order]
+        ret = ret.iloc[order].copy()
+        ret.index = pd.Index(index_sorted, name=df.index.name)
+        return ret, index_sorted
+
+    def _infer_default_index_name(self, df):
+        name = df.index.name
+        if name:
+            return str(name)
+        try:
+            y_name = self.stradi.get_attr('Y-axis name')
+        except Exception:
+            y_name = None
+        if y_name:
+            return str(y_name)
+        return 'y'
+
+    def _toggle_resolution_state(self, mode):
+        self.cb_resolution.setEnabled(mode != 'Original')
+
+    def _mark_index_name_edited(self, _text):
+        self._index_name_edited = True
+
+    def _effective_index_name(self):
+        text = self.txt_index_name.text().strip()
+        mode = self.cb_mode.currentText()
+        if (mode == 'Original' and self._source_index_name is None and
+                not self._index_name_edited):
+            return None
+        if text:
+            return text
+        if self._source_index_name is not None:
+            return self._source_index_name
+        return self._suggested_index_name
+
+    @classmethod
+    def _target_rows(cls, preset):
+        return cls.RESOLUTION_PRESETS.get(preset, cls.RESOLUTION_PRESETS[
+            'Medium'])
+
+    @classmethod
+    def resample_dataframe(cls, df, mode='Original', preset='Medium',
+                           index_name=None):
+        """Resample an exported DataFrame based on the selected mode."""
+        if df is None:
+            ret = pd.DataFrame()
+            ret.index.name = index_name
+            return ret
+        index_name = index_name if index_name not in ('',) else df.index.name
+        prepared, numeric_index = cls._ensure_monotonic_numeric_index(df)
+        if mode == 'Original' or numeric_index is None:
+            ret = prepared.copy()
+            ret.index.name = index_name
+            return ret
+
+        target_rows = cls._target_rows(preset)
+        if len(prepared) <= target_rows:
+            ret = prepared.copy()
+            ret.index.name = index_name
+            return ret
+
+        values = prepared.to_numpy(dtype=float)
+        x = numeric_index
+        xmin, xmax = x[0], x[-1]
+        if np.isclose(xmax, xmin):
+            ret = prepared.iloc[:target_rows].copy()
+            ret.index.name = index_name
+            return ret
+
+        if mode == 'Linear interpolation':
+            target_x = np.linspace(xmin, xmax, num=target_rows)
+            arr = np.vstack(
+                [np.interp(target_x, x, values[:, i])
+                 for i in range(values.shape[1])]
+            ).T
+            ret = pd.DataFrame(arr, index=target_x, columns=prepared.columns)
+        elif mode == 'Bin mean':
+            edges = np.linspace(xmin, xmax, num=target_rows + 1)
+            arr = np.empty((target_rows, values.shape[1]), dtype=float)
+            centers = 0.5 * (edges[:-1] + edges[1:])
+            for i in range(target_rows):
+                if i == target_rows - 1:
+                    mask = (x >= edges[i]) & (x <= edges[i + 1])
+                else:
+                    mask = (x >= edges[i]) & (x < edges[i + 1])
+                if mask.any():
+                    arr[i] = values[mask].mean(axis=0)
+                else:
+                    nearest = np.argmin(np.abs(x - centers[i]))
+                    arr[i] = values[nearest]
+            ret = pd.DataFrame(arr, index=centers, columns=prepared.columns)
+        elif mode == 'Sliding bin mean':
+            target_x = np.linspace(xmin, xmax, num=target_rows)
+            base_step = (xmax - xmin) / max(target_rows - 1, 1)
+            half_window = 1.5 * base_step
+            arr = np.empty((target_rows, values.shape[1]), dtype=float)
+            for i, center in enumerate(target_x):
+                mask = (x >= center - half_window) & (x <= center + half_window)
+                if mask.any():
+                    arr[i] = values[mask].mean(axis=0)
+                else:
+                    nearest = np.argmin(np.abs(x - center))
+                    arr[i] = values[nearest]
+            ret = pd.DataFrame(arr, index=target_x, columns=prepared.columns)
+        else:
+            ret = prepared.copy()
+        ret.index.name = index_name
+        return ret
 
     def get_open_file_name(self):
         """Ask the user for a filename for saving the data frame"""
@@ -137,9 +295,17 @@ class ExportDfDialog(QDialog):
         ending = osp.splitext(fname)[1]
         self.stradi.set_attr('exported', str(dt.datetime.now()))
         meta = self.stradi.valid_attrs
+        index_name = self._effective_index_name()
+        export_df = self.resample_dataframe(
+            self.df, mode=self.cb_mode.currentText(),
+            preset=self.cb_resolution.currentText(), index_name=index_name)
+        index_label = export_df.index.name
         if ending in ['.xls', '.xlsx']:
             with pd.ExcelWriter(fname) as writer:
-                self.df.to_excel(writer, sheet_name='Data')
+                kwargs = dict(sheet_name='Data', index=True)
+                if index_label is not None:
+                    kwargs['index_label'] = index_label
+                export_df.to_excel(writer, **kwargs)
                 if self.cb_include_meta.isChecked() and len(meta):
                     meta.to_excel(
                         writer, sheet_name='Metadata', header=False)
@@ -148,7 +314,10 @@ class ExportDfDialog(QDialog):
                 if self.cb_include_meta.isChecked():
                     for t in meta.iloc[:, 0].items():
                         f.write('# %s: %s\n' % t)
-            self.df.to_csv(fname, mode='a')
+            kwargs = dict(mode='a', index=True)
+            if index_label is not None:
+                kwargs['index_label'] = index_label
+            export_df.to_csv(fname, **kwargs)
         self.accept()
 
     def cancel(self):

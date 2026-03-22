@@ -374,6 +374,21 @@ class DigitizerTest(bt.StraditizeWidgetsTestCase):
             exported, self.straditizer.final_df,
             check_index_type=False, check_dtype=False)
 
+    def test_plot_results_dialog_uses_shared_export_dialog_pipeline(self):
+        """Result-review export should go through ExportDfDialog."""
+        self.test_load_samples()
+        results_plot = self.straditizer_widgets.plot_control.results_plot
+
+        with mock.patch(
+                'straditize.widgets.menu_actions.ExportDfDialog.export_df'
+                ) as export_df:
+            results_plot.plot_results()
+            dialog = results_plot.results_dialog
+            QTest.mouseClick(dialog.btn_export, Qt.LeftButton)
+
+        self.assertTrue(export_df.called)
+        self.assertIs(export_df.call_args[0][0], self.straditizer_widgets)
+
 
 class ChildReaderFrameworkTest(bt.StraditizeWidgetsTestCase):
     """Test the column specific reader framework"""
