@@ -1154,7 +1154,8 @@ class DataReader(LabelSelection):
              set(child.columns or [None]) <= cols),
             None)
 
-    def create_exaggerations_reader(self, factor, cls=None):
+    def create_exaggerations_reader(self, factor, cls=None,
+                                    extraction_mode=None):
         """Create a new exaggerations reader for this reader
 
         Parameters
@@ -1163,6 +1164,9 @@ class DataReader(LabelSelection):
             The exaggeration factor
         cls: type
             The :class:`DataReader` subclass
+        extraction_mode: str
+            Foreground extraction mode for the exaggeration reader. Defaults
+            to the mode of the current reader.
 
         Returns
         -------
@@ -1171,9 +1175,11 @@ class DataReader(LabelSelection):
         from PIL import Image
         if cls is None:
             cls = self.__class__
+        if extraction_mode is None:
+            extraction_mode = self.extraction_mode
         new_binary = np.zeros_like(self.binary)
         ret = cls(new_binary, ax=self.ax, extent=self.extent, plot=True,
-                  parent=self)
+                  parent=self, extraction_mode=extraction_mode)
         ret.is_exaggerated = factor
         self.children.append(ret)
         ret.columns = self.columns

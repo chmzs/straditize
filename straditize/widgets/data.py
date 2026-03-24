@@ -29,6 +29,7 @@ import numpy as np
 import pickle
 import pandas as pd
 import xarray as xr
+from straditize import binary
 from straditize.widgets import StraditizerControlBase, get_icon
 from straditize.straditizer import (
     create_matplotlib_figure, get_toolbar_mode, should_use_headless_figure)
@@ -55,6 +56,23 @@ else:
 
 reader_types = ['area', 'bars', 'rounded bars', 'stacked area',
                 'line']
+
+extraction_mode_items = [
+    ('Standard', 'standard'),
+    ('Light overlay on white background', 'light-overlay-white'),
+    ('Dark ink on light background', 'dark-ink-light'),
+    ('Light ink on dark background', 'light-ink-dark'),
+]
+extraction_mode_labels = dict(extraction_mode_items)
+
+
+def get_extraction_mode_label(mode):
+    """Return the user-facing label for an extraction mode identifier."""
+    mode = binary.DataReader.normalize_extraction_mode(mode)
+    for label, value in extraction_mode_items:
+        if value == mode:
+            return label
+    return 'Standard'
 
 
 def int_list2str(numbers):
@@ -134,6 +152,9 @@ class DigitizingControl(StraditizerControlBase):
     #: Combobox for selecting the reader type
     cb_reader_type = None
 
+    #: Combobox for selecting the extraction mode of the main reader
+    cb_extraction_mode = None
+
     #: Button for initializing the reader
     btn_init_reader = None
 
@@ -165,6 +186,9 @@ class DigitizingControl(StraditizerControlBase):
 
     #: A QComboBox to select the reader type for exaggerations
     cb_exag_reader_type = None
+
+    #: A QComboBox to select the extraction mode for exaggerations
+    cb_exag_extraction_mode = None
 
     #: Button to add an exaggerations reader
     btn_new_exaggeration = None
@@ -363,6 +387,10 @@ class DigitizingControl(StraditizerControlBase):
         cb.setEditable(False)
         cb.addItems(reader_types)
         cb.setCurrentIndex(0)
+        self.cb_extraction_mode = cb = QComboBox()
+        cb.setEditable(False)
+        cb.addItems([label for label, _ in extraction_mode_items])
+        cb.setCurrentText('Standard')
 
         self.btn_init_reader = QPushButton('Convert image')
         self.btn_init_reader.setToolTip(
@@ -408,6 +436,10 @@ class DigitizingControl(StraditizerControlBase):
         cb.setEditable(False)
         cb.addItems(reader_types)
         cb.setCurrentIndex(0)
+        self.cb_exag_extraction_mode = cb = QComboBox()
+        cb.setEditable(False)
+        cb.addItems([label for label, _ in extraction_mode_items])
+        cb.setCurrentText('Standard')
 
         self.btn_new_exaggeration = QPushButton('+')
         self.btn_select_exaggerations = QPushButton('Select exaggerations')
@@ -601,6 +633,7 @@ class DigitizingControl(StraditizerControlBase):
             self.btn_column_starts, self.btn_column_ends,
             self.cb_readers, self.btn_new_child_reader,
             self.txt_exag_factor, self.cb_exag_reader_type,
+            self.cb_exag_extraction_mode,
             self.txt_exag_percentage, self.txt_exag_absolute,
             self.btn_digitize_exag,
             self.btn_new_exaggeration, self.btn_select_exaggerations,
@@ -715,9 +748,15 @@ class DigitizingControl(StraditizerControlBase):
                 self.straditizer.data_reader is not None):
             self.cb_reader_type.setCurrentText(get_reader_name(
                 self.straditizer.data_reader))
+            self.cb_extraction_mode.setCurrentText(get_extraction_mode_label(
+                self.straditizer.data_reader.extraction_mode))
             reader = self.straditizer.data_reader.exaggerated_reader
             self.cb_exag_reader_type.setCurrentText(get_reader_name(
                 reader or self.straditizer.data_reader))
+            self.cb_exag_extraction_mode.setCurrentText(
+                get_extraction_mode_label(
+                    getattr(reader or self.straditizer.data_reader,
+                            'extraction_mode', 'standard')))
             if reader is not None:
                 self.txt_exag_factor.setText(str(reader.is_exaggerated))
             self.txt_occurences_value.setText(
@@ -869,7 +908,8 @@ class DigitizingControl(StraditizerControlBase):
                     self.btn_column_ends,
                     self.cb_readers, self.btn_new_child_reader,
                     self.cb_exag_reader_type, self.btn_new_exaggeration,
-                    self.txt_exag_factor, self.txt_exag_absolute,
+                    self.cb_exag_extraction_mode, self.txt_exag_factor,
+                    self.txt_exag_absolute,
                     self.txt_exag_percentage, self.btn_digitize_exag,
                     self.btn_show_disconnected_parts, self.txt_fromlast,
                     self.cb_fromlast, self.txt_from0, self.cb_from0,
@@ -888,7 +928,8 @@ class DigitizingControl(StraditizerControlBase):
               ):
             return False
         elif (self.straditizer.data_reader.exaggerated_reader is not None and
-              w in [self.cb_exag_reader_type, self.btn_new_exaggeration,
+              w in [self.cb_exag_reader_type, self.cb_exag_extraction_mode,
+                    self.btn_new_exaggeration,
                     self.txt_exag_factor]):
             return False
         elif (w is self.btn_reset_samples and
@@ -950,6 +991,10 @@ class DigitizingControl(StraditizerControlBase):
         hbox_start = QHBoxLayout()
         hbox_start.addWidget(self.btn_select_data)
         hbox_start.addWidget(self.cb_reader_type)
+        vbox_start.addLayout(hbox_start)
+        hbox_start = QHBoxLayout()
+        hbox_start.addWidget(QLabel('Extraction mode:'))
+        hbox_start.addWidget(self.cb_extraction_mode)
         vbox_start.addLayout(hbox_start)
 
         w = QWidget()
@@ -1030,6 +1075,10 @@ class DigitizingControl(StraditizerControlBase):
         hbox.addWidget(self.cb_exag_reader_type)
         hbox.addStretch(0)
         hbox.addWidget(self.btn_new_exaggeration)
+        vbox.addLayout(hbox)
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel('Extraction mode:'))
+        hbox.addWidget(self.cb_exag_extraction_mode)
         vbox.addLayout(hbox)
         vbox.addWidget(self.btn_select_exaggerations)
         digitizer_layout = QGridLayout()
@@ -1296,6 +1345,8 @@ class DigitizingControl(StraditizerControlBase):
         kws = self.init_reader_kws.copy()
         reader_type = self.cb_reader_type.currentText()
         kws['reader_type'] = reader_type
+        kws['extraction_mode'] = extraction_mode_labels[
+            self.cb_extraction_mode.currentText()]
         if self.straditizer.data_reader is not None:
             for reader in self.straditizer.data_reader.iter_all_readers:
                 reader.remove_plots()
@@ -1306,15 +1357,16 @@ class DigitizingControl(StraditizerControlBase):
 
     def init_exaggerated_reader(self):
         """Initialize the reader for exaggeration features"""
-        from straditize.binary import readers
         reader_type = self.cb_exag_reader_type.currentText()
         if reader_type == get_reader_name(self.straditizer.data_reader):
             loader = None
         else:
-            loader = readers[reader_type]
+            loader = binary.readers[reader_type]
         factor = float(self.txt_exag_factor.text())
         self.straditizer.data_reader.create_exaggerations_reader(
-            factor, loader)
+            factor, loader,
+            extraction_mode=extraction_mode_labels[
+                self.cb_exag_extraction_mode.currentText()])
         self.straditizer_widgets.refresh()
 
     def select_exaggerated_features(self):

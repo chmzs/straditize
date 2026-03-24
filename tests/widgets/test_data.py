@@ -562,6 +562,12 @@ class ChildReaderFrameworkTest(bt.StraditizeWidgetsTestCase):
 class ExaggeratedTest(bt.StraditizeWidgetsTestCase):
     """A test case for the exaggerated reader"""
 
+    def test_init_reader_propagates_extraction_mode(self):
+        self.digitizer.cb_extraction_mode.setCurrentText(
+            'Light overlay on white background')
+        self.init_reader()
+        self.assertEqual(self.reader.extraction_mode, 'light-overlay-white')
+
     def test_init_exaggerated(self):
         self.init_reader('basic_diagram_exaggerated.png')
         self.reader.column_starts = self.column_starts
@@ -569,6 +575,18 @@ class ExaggeratedTest(bt.StraditizeWidgetsTestCase):
         self.digitizer.txt_exag_factor.setText('2')
         # add the exaggeration reader
         QTest.mouseClick(self.digitizer.btn_new_exaggeration, Qt.LeftButton)
+
+    def test_init_exaggerated_reader_propagates_extraction_mode(self):
+        self.init_reader('basic_diagram_exaggerated.png')
+        self.reader.column_starts = self.column_starts
+        self.straditizer_widgets.refresh()
+        self.digitizer.txt_exag_factor.setText('2')
+        self.digitizer.cb_exag_extraction_mode.setCurrentText(
+            'Light overlay on white background')
+        QTest.mouseClick(self.digitizer.btn_new_exaggeration, Qt.LeftButton)
+        self.assertEqual(
+            self.reader.exaggerated_reader.extraction_mode,
+            'light-overlay-white')
 
     def test_select_exaggerations(self):
         """Test selecting the exaggerations"""
