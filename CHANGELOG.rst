@@ -1,3 +1,29 @@
+v0.2.2
+======
+
+This hotfix release focuses on repaired interactive workflows and desktop
+runtime compatibility on top of the refreshed ``0.2`` stack.
+
+Changed
+-------
+* The main image window now opens larger by default and reduces the embedded
+  console footprint so image review starts in a more usable layout.
+* Export dialogs now default unnamed y-indices to ``age`` and expose an
+  explicit custom interval for interpolation and aggregation modes.
+* The magnifier redraw path now throttles pointer-driven updates to reduce UI
+  lag on large figures.
+
+Fixed
+-----
+* Restored manual feature removal for modern Matplotlib selectors, including
+  endpoint-driven removal of horizontal and vertical line features.
+* Added interactive ``Edit full data`` support so rows can be inserted or
+  removed directly from the plotted digitized profile.
+* Hardened Qt startup on Windows by repairing Qt plugin path discovery before
+  the GUI initializes.
+* Removed deprecated ``min_size`` usage in feature cleanup paths that would
+  otherwise warn on modern scikit-image releases.
+
 v0.2.1
 ======
 

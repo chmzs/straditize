@@ -61,11 +61,20 @@ class PointOrRectangleSelector(mwid.RectangleSelector):
 
     def press(self, *args, **kwargs):
         ret = super(PointOrRectangleSelector, self).press(*args, **kwargs)
-        if self.eventpress is not None:
-            x = self.eventpress.xdata
-            y = self.eventpress.ydata
-            self.extents = x, x, y, y
+        event = self._get_press_event()
+        if event is not None:
+            self._set_point_extents(event.xdata, event.ydata)
         return ret
+
+    def _get_press_event(self):
+        """Return the active press event across matplotlib versions."""
+        event = getattr(self, 'eventpress', None)
+        if event is None:
+            event = getattr(self, '_eventpress', None)
+        return event
+
+    def _set_point_extents(self, x, y):
+        self.extents = x, x, y, y
 
 
 class SelectionToolbar(QToolBar, StraditizerControlBase):
@@ -609,7 +618,10 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
         ----------
         i: int
             The transparency between 0 and 100"""
-        self.data_obj._select_img.set_alpha(i / 100.)
+        select_img = getattr(self.data_obj, '_select_img', None)
+        if select_img is None:
+            return
+        select_img.set_alpha(i / 100.)
         self.data_obj._update_magni_img()
         self.canvas.draw()
 

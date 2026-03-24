@@ -18,6 +18,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>."""
 import numpy as np
+import time
 from matplotlib.widgets import Slider
 import matplotlib.colorbar as mcbar
 from matplotlib.axes import SubplotBase
@@ -49,6 +50,9 @@ class Magnifier(object):
 
     def __init__(self, ax_src, ax=None, *args, **kwargs):
         self.ax_src = ax_src
+        self._last_pointer_xy = None
+        self._last_redraw_at = 0.0
+        self._min_redraw_interval = 1.0 / 30.0
         if ax is None:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -85,7 +89,7 @@ class Magnifier(object):
         dy = self.dy
         self.ax.set_xlim(x - dx, x + dx)
         self.ax.set_ylim(y - dy, y + dy)
-        self.ax.figure.canvas.draw()
+        self.ax.figure.canvas.draw_idle()
 
     def make_plot(self, image, *args, **kwargs):
         self.plot_image = self.ax.imshow(image, *args, **kwargs)
@@ -94,6 +98,15 @@ class Magnifier(object):
         if event.inaxes != self.ax_src or self.ax is None:
             return
         x, y = event.xdata, event.ydata
+        last_xy = self._last_pointer_xy
+        if last_xy is not None:
+            if abs(x - last_xy[0]) < 0.5 and abs(y - last_xy[1]) < 0.5:
+                return
+        now = time.monotonic()
+        if now - self._last_redraw_at < self._min_redraw_interval:
+            return
+        self._last_redraw_at = now
+        self._last_pointer_xy = (x, y)
         dx = self.dx
         dy = self.dy
         ax = self.ax
@@ -104,7 +117,7 @@ class Magnifier(object):
         self.point.set_xdata([x])
         self.point.set_ydata([y])
         self.point.set_visible(True)
-        ax.figure.canvas.draw()
+        ax.figure.canvas.draw_idle()
 
     def onenter(self, event):
         if event.inaxes != self.ax_src or self.ax is None:
@@ -140,8 +153,9 @@ class Magnifier(object):
         canvas.mpl_disconnect(self.cid_motion)
         self.enable_zoom()
         self.point.set_visible(False)
+        self._last_pointer_xy = None
         if self.ax is not None:
-            self.ax.figure.canvas.draw()
+            self.ax.figure.canvas.draw_idle()
 
     def enable_zoom(self):
         self.cid_enter = self.ax_src.figure.canvas.mpl_connect(

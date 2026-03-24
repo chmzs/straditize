@@ -3,9 +3,12 @@ import numpy as np
 import pandas as pd
 import os.path as osp
 from itertools import chain
+from types import SimpleNamespace
+from unittest import mock
 import _base_testing as bt
 import unittest
 from psyplot_gui.compat.qtcompat import QTest, Qt
+from straditize.widgets.selection_toolbar import PointOrRectangleSelector
 
 
 class StraditizerSelectionToolsTest(bt.StraditizeWidgetsTestCase):
@@ -301,6 +304,31 @@ class ReaderGreyScaleToolsTest(StraditizerSelectionToolsTest):
         """Test the pattern selection for full binary patterns"""
         StraditizerSelectionToolsTest.test_partial_grey_pattern(
             self, 'basic_diagram_binary.png')
+
+
+class SelectorCompatTest(unittest.TestCase):
+    """Unit tests for matplotlib selector compatibility."""
+
+    def test_get_press_event_prefers_public_attribute(self):
+        selector = PointOrRectangleSelector.__new__(PointOrRectangleSelector)
+        selector.eventpress = 'public'
+        selector._eventpress = 'private'
+        self.assertEqual(selector._get_press_event(), 'public')
+
+    def test_get_press_event_falls_back_to_private_attribute(self):
+        selector = PointOrRectangleSelector.__new__(PointOrRectangleSelector)
+        selector._eventpress = 'private'
+        self.assertEqual(selector._get_press_event(), 'private')
+
+    def test_press_handles_private_eventpress_without_crashing(self):
+        selector = PointOrRectangleSelector.__new__(PointOrRectangleSelector)
+        selector._eventpress = SimpleNamespace(xdata=3.0, ydata=4.0)
+        with mock.patch('matplotlib.widgets.RectangleSelector.press',
+                        return_value=None), \
+                mock.patch.object(
+                    selector, '_set_point_extents', autospec=True) as setter:
+            selector.press(object())
+        setter.assert_called_once_with(3.0, 4.0)
 
 
 if __name__ == '__main__':

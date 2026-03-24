@@ -45,12 +45,6 @@ _updating = []
 class ExportDfDialog(QDialog):
     """A QDialog to export a :class:`pandas.DataFrame` to Excel or CSV"""
 
-    RESOLUTION_PRESETS = {
-        'Fine': 1000,
-        'Medium': 500,
-        'Coarse': 200,
-    }
-
     @docstrings.get_sections(base='ExportDfDialog')
     def __init__(self, df, straditizer, fname=None, *args, **kwargs):
         """
@@ -78,9 +72,12 @@ class ExportDfDialog(QDialog):
         self.cb_mode.addItems(
             ['Original', 'Linear interpolation', 'Bin mean',
              'Sliding bin mean'])
-        self.cb_resolution = QComboBox()
-        self.cb_resolution.addItems(['Fine', 'Medium', 'Coarse'])
-        self.cb_resolution.setCurrentText('Medium')
+        self.txt_interval = QLineEdit()
+        self._default_interval = self._infer_default_interval(self.df)
+        self.txt_interval.setText(str(self._default_interval))
+        self.txt_interval.setToolTip(
+            'Custom y-interval used for interpolation/binning. '
+            'Unit follows the current y-axis values.')
 
         self.txt_index_name = QLineEdit()
         self._source_index_name = self.df.index.name
@@ -111,8 +108,8 @@ class ExportDfDialog(QDialog):
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
-        hbox.addWidget(QLabel('Resolution:'))
-        hbox.addWidget(self.cb_resolution)
+        hbox.addWidget(QLabel('Custom interval:'))
+        hbox.addWidget(self.txt_interval)
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
@@ -131,9 +128,9 @@ class ExportDfDialog(QDialog):
         bbox.accepted.connect(self._export)
         bbox.rejected.connect(self.reject)
         self.bt_open_file.clicked.connect(self.get_open_file_name)
-        self.cb_mode.currentTextChanged.connect(self._toggle_resolution_state)
+        self.cb_mode.currentTextChanged.connect(self._toggle_interval_state)
         self.txt_index_name.textEdited.connect(self._mark_index_name_edited)
-        self._toggle_resolution_state(self.cb_mode.currentText())
+        self._toggle_interval_state(self.cb_mode.currentText())
 
         if fname is not None:
             self.txt_fname.setText(fname)
@@ -162,10 +159,23 @@ class ExportDfDialog(QDialog):
             y_name = None
         if y_name:
             return str(y_name)
-        return 'y'
+        return 'age'
 
-    def _toggle_resolution_state(self, mode):
-        self.cb_resolution.setEnabled(mode != 'Original')
+    def _infer_default_interval(self, df):
+        if df is None or df.empty:
+            return 1.0
+        try:
+            values = np.asarray(df.index.values, dtype=float)
+        except (TypeError, ValueError):
+            return 1.0
+        diffs = np.diff(np.sort(np.unique(values)))
+        diffs = diffs[diffs > 0]
+        if len(diffs):
+            return float(np.median(diffs))
+        return 1.0
+
+    def _toggle_interval_state(self, mode):
+        self.txt_interval.setEnabled(mode != 'Original')
 
     def _mark_index_name_edited(self, _text):
         self._index_name_edited = True
@@ -183,12 +193,7 @@ class ExportDfDialog(QDialog):
         return self._suggested_index_name
 
     @classmethod
-    def _target_rows(cls, preset):
-        return cls.RESOLUTION_PRESETS.get(preset, cls.RESOLUTION_PRESETS[
-            'Medium'])
-
-    @classmethod
-    def resample_dataframe(cls, df, mode='Original', preset='Medium',
+    def resample_dataframe(cls, df, mode='Original', interval=None,
                            index_name=None):
         """Resample an exported DataFrame based on the selected mode."""
         if df is None:
@@ -201,9 +206,13 @@ class ExportDfDialog(QDialog):
             ret = prepared.copy()
             ret.index.name = index_name
             return ret
-
-        target_rows = cls._target_rows(preset)
-        if len(prepared) <= target_rows:
+        try:
+            interval = float(interval)
+        except (TypeError, ValueError):
+            ret = prepared.copy()
+            ret.index.name = index_name
+            return ret
+        if interval <= 0:
             ret = prepared.copy()
             ret.index.name = index_name
             return ret
@@ -212,23 +221,32 @@ class ExportDfDialog(QDialog):
         x = numeric_index
         xmin, xmax = x[0], x[-1]
         if np.isclose(xmax, xmin):
-            ret = prepared.iloc[:target_rows].copy()
+            ret = prepared.copy()
             ret.index.name = index_name
             return ret
+        target_x = np.arange(xmin, xmax + interval * 0.5, interval,
+                             dtype=float)
+        if len(target_x) == 0:
+            target_x = np.array([xmin, xmax], dtype=float)
+        elif target_x[-1] < xmax:
+            target_x = np.r_[target_x, [xmax]]
+        target_x = np.unique(target_x)
+        if len(target_x) < 2:
+            target_x = np.array([xmin, xmax], dtype=float)
 
         if mode == 'Linear interpolation':
-            target_x = np.linspace(xmin, xmax, num=target_rows)
             arr = np.vstack(
                 [np.interp(target_x, x, values[:, i])
                  for i in range(values.shape[1])]
             ).T
             ret = pd.DataFrame(arr, index=target_x, columns=prepared.columns)
         elif mode == 'Bin mean':
-            edges = np.linspace(xmin, xmax, num=target_rows + 1)
-            arr = np.empty((target_rows, values.shape[1]), dtype=float)
+            edges = np.r_[target_x - interval / 2.0,
+                          [target_x[-1] + interval / 2.0]]
+            arr = np.empty((len(target_x), values.shape[1]), dtype=float)
             centers = 0.5 * (edges[:-1] + edges[1:])
-            for i in range(target_rows):
-                if i == target_rows - 1:
+            for i in range(len(centers)):
+                if i == len(centers) - 1:
                     mask = (x >= edges[i]) & (x <= edges[i + 1])
                 else:
                     mask = (x >= edges[i]) & (x < edges[i + 1])
@@ -239,10 +257,8 @@ class ExportDfDialog(QDialog):
                     arr[i] = values[nearest]
             ret = pd.DataFrame(arr, index=centers, columns=prepared.columns)
         elif mode == 'Sliding bin mean':
-            target_x = np.linspace(xmin, xmax, num=target_rows)
-            base_step = (xmax - xmin) / max(target_rows - 1, 1)
-            half_window = 1.5 * base_step
-            arr = np.empty((target_rows, values.shape[1]), dtype=float)
+            half_window = 1.5 * interval
+            arr = np.empty((len(target_x), values.shape[1]), dtype=float)
             for i, center in enumerate(target_x):
                 mask = (x >= center - half_window) & (x <= center + half_window)
                 if mask.any():
@@ -295,10 +311,12 @@ class ExportDfDialog(QDialog):
         ending = osp.splitext(fname)[1]
         self.stradi.set_attr('exported', str(dt.datetime.now()))
         meta = self.stradi.valid_attrs
+        interval_txt = self.txt_interval.text().strip()
+        interval = self._default_interval if not interval_txt else interval_txt
         index_name = self._effective_index_name()
         export_df = self.resample_dataframe(
             self.df, mode=self.cb_mode.currentText(),
-            preset=self.cb_resolution.currentText(), index_name=index_name)
+            interval=interval, index_name=index_name)
         index_label = export_df.index.name
         if ending in ['.xls', '.xlsx']:
             with pd.ExcelWriter(fname) as writer:
@@ -760,7 +778,33 @@ class StraditizerMenuActions(StraditizerControlBase):
         self.create_sliders(stradi)
         self.set_stradi_in_console()
         self.stack_zoom_window()
+        self._apply_default_window_sizes()
         self.straditizer_widgets.refresh()
+
+    def _apply_default_window_sizes(self):
+        """Apply a larger default image window and a smaller console area."""
+        from psyplot_gui.main import mainwindow
+
+        try:
+            fig_dock = self.straditizer.ax.figure.canvas.manager.window
+        except AttributeError:
+            return
+
+        try:
+            fig_dock.resize(1280, 900)
+        except Exception:
+            pass
+
+        console_dock = getattr(getattr(mainwindow, 'console', None),
+                               'dock', None)
+        if console_dock is None:
+            return
+        try:
+            # Keep focus on the image figure while shrinking console height.
+            mainwindow.resizeDocks(
+                [fig_dock, console_dock], [900, 220], Qt.Vertical)
+        except Exception:
+            pass
 
     def create_sliders(self, stradi):
         """Create sliders to navigate in the given axes

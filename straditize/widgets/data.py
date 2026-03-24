@@ -37,7 +37,7 @@ from psyplot_gui.compat.qtcompat import (
     Qt, QHBoxLayout, QVBoxLayout, QWidget, QTreeWidgetItem,
     with_qt5, QIcon, QIntValidator, QTreeWidget, QToolBar, QGridLayout,
     QCheckBox, QInputDialog, QFileDialog, QMessageBox)
-from straditize.common import docstrings
+from straditize.common import docstrings, nearest_index_position
 from psyplot.utils import unique_everseen
 from itertools import chain
 
@@ -248,8 +248,14 @@ class DigitizingControl(StraditizerControlBase):
     #: Button for removing vertical lines
     btn_remove_vlines = None
 
+    #: Button for manually removing vertical features
+    btn_remove_vlines_manual = None
+
     #: button for removing horizontal lines
     btn_remove_hlines = None
+
+    #: Button for manually removing horizontal features
+    btn_remove_hlines_manual = None
 
     #: Button for removing y-axes
     btn_remove_yaxes = None
@@ -290,6 +296,9 @@ class DigitizingControl(StraditizerControlBase):
     #: :meth:`straditize.straditizer.Straditizer.marks_for_samples` and
     #: :meth:`straditize.straditizer.Straditizer.marks_for_samples_sep`)
     btn_edit_samples = None
+
+    #: A button to edit the full digitized data
+    btn_edit_full_data = None
 
     #: A button to reset the samples
     btn_reset_samples = None
@@ -501,6 +510,9 @@ class DigitizingControl(StraditizerControlBase):
         self.btn_remove_vlines = QPushButton('vertical lines')
         self.btn_remove_vlines.setToolTip(
             'Remove vertical lines, i.e. y-axes')
+        self.btn_remove_vlines_manual = QPushButton('manual vertical')
+        self.btn_remove_vlines_manual.setToolTip(
+            'Remove multiple vertical lines by entering their endpoints')
 
         self.btn_remove_yaxes = QPushButton('y-axes')
         self.btn_remove_yaxes.setToolTip(
@@ -509,6 +521,9 @@ class DigitizingControl(StraditizerControlBase):
         self.btn_remove_hlines = QPushButton('horizontal lines')
         self.btn_remove_hlines.setToolTip(
             'Remove horizonal lines, i.e. lines parallel to the x-axis')
+        self.btn_remove_hlines_manual = QPushButton('manual horizontal')
+        self.btn_remove_hlines_manual.setToolTip(
+            'Remove multiple horizontal lines by entering their endpoints')
 
         self.btn_remove_xaxes = QPushButton('x-axes')
         self.btn_remove_xaxes.setToolTip(
@@ -528,6 +543,9 @@ class DigitizingControl(StraditizerControlBase):
         self.btn_edit_samples = QPushButton('Edit samples')
         self.btn_edit_samples.setToolTip(
             'Modify and edit the samples')
+        self.btn_edit_full_data = QPushButton('Edit full data')
+        self.btn_edit_full_data.setToolTip(
+            'Edit the full digitized data table directly')
         self.btn_reset_samples = QPushButton('Reset')
         self.btn_reset_samples.setToolTip('Reset the samples')
 
@@ -596,8 +614,10 @@ class DigitizingControl(StraditizerControlBase):
             self.btn_show_parts_at_column_ends,
             self.btn_show_small_parts, self.txt_max_small_size,
             self.btn_align_vertical,
-            self.btn_edit_samples, self.btn_find_samples,
+            self.btn_edit_samples, self.btn_edit_full_data,
+            self.btn_find_samples,
             self.btn_load_samples,
+            self.btn_remove_hlines_manual, self.btn_remove_vlines_manual,
             self.btn_select_occurences, self.btn_edit_occurences,
             self.txt_occurences_value, self.cb_split_source
             ]
@@ -623,7 +643,11 @@ class DigitizingControl(StraditizerControlBase):
         self.btn_remove_yaxes.clicked.connect(self.remove_yaxes)
         self.btn_remove_xaxes.clicked.connect(self.remove_xaxes)
         self.btn_remove_hlines.clicked.connect(self.remove_hlines)
+        self.btn_remove_hlines_manual.clicked.connect(
+            self.remove_hlines_manually)
         self.btn_remove_vlines.clicked.connect(self.remove_vlines)
+        self.btn_remove_vlines_manual.clicked.connect(
+            self.remove_vlines_manually)
         self.btn_show_disconnected_parts.clicked.connect(
             self.show_disconnected_parts)
         self.btn_show_parts_at_column_ends.clicked.connect(
@@ -632,6 +656,7 @@ class DigitizingControl(StraditizerControlBase):
         self.btn_find_samples.clicked.connect(self.find_samples)
         self.btn_load_samples.clicked.connect(self.load_samples)
         self.btn_edit_samples.clicked.connect(self.edit_samples)
+        self.btn_edit_full_data.clicked.connect(self.edit_full_data)
         self.btn_reset_samples.clicked.connect(self.reset_samples)
         self.btn_show_small_parts.clicked.connect(self.show_small_parts)
         self.txt_max_small_size.textChanged.connect(
@@ -870,7 +895,8 @@ class DigitizingControl(StraditizerControlBase):
               self.straditizer.data_reader._sample_locs is None):
             return False
         elif (w in [self.btn_find_samples, self.btn_edit_samples,
-                    self.btn_load_samples, self.btn_digitize_exag] and
+                    self.btn_edit_full_data, self.btn_load_samples,
+                    self.btn_digitize_exag] and
               self.straditizer.data_reader.full_df is None):
             return False
         elif (w is self.btn_show_small_parts and
@@ -1122,13 +1148,17 @@ class DigitizingControl(StraditizerControlBase):
         grid.addWidget(self.btn_remove_yaxes, 0, 1)
         grid.addWidget(self.btn_remove_hlines, 1, 0)
         grid.addWidget(self.btn_remove_vlines, 1, 1)
+        grid.addWidget(self.btn_remove_hlines_manual, 2, 0)
+        grid.addWidget(self.btn_remove_vlines_manual, 2, 1)
         w = QWidget()
         w.setLayout(grid)
         child.addChild(line_child)
         self.tree.setItemWidget(line_child, 0, w)
         self.add_info_button(line_child, 'remove_lines.rst',
                              connections=[self.btn_remove_vlines,
+                                          self.btn_remove_vlines_manual,
                                           self.btn_remove_hlines,
+                                          self.btn_remove_hlines_manual,
                                           self.btn_remove_yaxes,
                                           self.btn_remove_xaxes])
 
@@ -1223,6 +1253,7 @@ class DigitizingControl(StraditizerControlBase):
 
         hbox_cols = QHBoxLayout()
         hbox_cols.addWidget(self.btn_edit_samples)
+        hbox_cols.addWidget(self.btn_edit_full_data)
         hbox_cols.addWidget(self.btn_reset_samples)
         w = QWidget()
         w.setLayout(hbox_cols)
@@ -1515,6 +1546,169 @@ class DigitizingControl(StraditizerControlBase):
             self.straditizer.remove_marks, self._close_samples_fig)
         self.maybe_show_btn_reset_samples()
 
+    def edit_full_data(self):
+        """Open an interactive editor for the full digitized data.
+
+        Left click in the reader axes adds a row at the clicked y-position.
+        Right click removes the nearest existing row.
+        """
+        from straditize.widgets import get_mainwindow
+
+        reader = self.reader
+        if reader is None or reader._full_df is None:
+            return
+
+        mainwindow = get_mainwindow(self.straditizer_widgets)
+        editor = mainwindow.new_data_frame_editor(
+            reader._full_df,
+            'Full digitized data (pixel) - Left click add / Right click del')
+        model = editor.table.model()
+
+        def refresh_plots(*args, **kwargs):
+            pc = self.straditizer_widgets.plot_control.table
+            if pc.can_plot_full_df() and pc.get_full_df_lines():
+                pc.remove_full_df_plot()
+                pc.plot_full_df()
+                pc.refresh()
+            self.straditizer.draw_figure()
+
+        try:
+            model.dataChanged.connect(refresh_plots)
+        except AttributeError:
+            pass
+        try:
+            model.modelReset.connect(refresh_plots)
+        except AttributeError:
+            pass
+
+        self._disconnect_full_data_editor_events()
+        self._full_data_editor = editor
+        self._full_data_click_fig = weakref.ref(reader.ax.figure)
+        self._full_data_click_cid = reader.ax.figure.canvas.mpl_connect(
+            'button_press_event', self._edit_full_data_from_click)
+        try:
+            editor.destroyed.connect(self._disconnect_full_data_editor_events)
+        except AttributeError:
+            pass
+
+        return editor
+
+    def _disconnect_full_data_editor_events(self, *args, **kwargs):
+        fig = getattr(self, '_full_data_click_fig', lambda: None)()
+        cid = getattr(self, '_full_data_click_cid', None)
+        if fig is not None and cid is not None:
+            fig.canvas.mpl_disconnect(cid)
+        for attr in ['_full_data_click_fig', '_full_data_click_cid',
+                     '_full_data_editor']:
+            if hasattr(self, attr):
+                delattr(self, attr)
+
+    def _coerce_full_data_index(self, y):
+        index = self.reader._full_df.index
+        if np.issubdtype(index.dtype, np.integer):
+            return int(np.round(y))
+        return float(y)
+
+    def _add_full_data_row(self, y):
+        reader = self.reader
+        df = reader._full_df
+        y_idx = self._coerce_full_data_index(y)
+        if y_idx in df.index:
+            return False
+        if df.empty:
+            return False
+
+        y_interp = float(y_idx)
+        values = {}
+        for col, s in df.items():
+            valid = s.dropna()
+            if valid.empty:
+                values[col] = np.nan
+            elif len(valid) == 1:
+                values[col] = valid.iloc[0]
+            else:
+                valid = valid.sort_index()
+                x = valid.index.values.astype(float)
+                values[col] = np.interp(y_interp, x, valid.values.astype(float))
+
+        df.loc[y_idx] = pd.Series(values)
+        df.sort_index(inplace=True)
+        return True
+
+    def _remove_nearest_full_data_row(self, y):
+        reader = self.reader
+        df = reader._full_df
+        if len(df.index) <= 1:
+            return False
+        idx = nearest_index_position(df.index, y)
+        df.drop(df.index[idx], inplace=True)
+        return True
+
+    def _refresh_full_data_editor_and_plot(self):
+        editor = getattr(self, '_full_data_editor', None)
+        if editor is not None:
+            try:
+                editor.set_df(self.reader._full_df, show=False)
+            except RuntimeError:
+                pass
+        pc = self.straditizer_widgets.plot_control.table
+        if pc.can_plot_full_df():
+            if pc.get_full_df_lines():
+                pc.remove_full_df_plot()
+            pc.plot_full_df()
+            pc.refresh()
+        self.straditizer.draw_figure()
+
+    @staticmethod
+    def _is_left_click(button):
+        try:
+            from matplotlib.backend_bases import MouseButton
+        except ImportError:
+            return button == 1
+        return button in [1, MouseButton.LEFT]
+
+    @staticmethod
+    def _is_right_click(button):
+        try:
+            from matplotlib.backend_bases import MouseButton
+        except ImportError:
+            return button == 3
+        return button in [3, MouseButton.RIGHT]
+
+    def _event_to_full_data_y(self, event):
+        y = float(event.ydata)
+        reader = self.reader
+        if event.inaxes is reader.ax:
+            extent = getattr(reader, 'extent', None)
+            if extent is not None:
+                y -= float(min(extent[2:]))
+        elif event.inaxes is self.straditizer.ax:
+            ylim = getattr(self.straditizer, 'data_ylim', None)
+            if ylim is not None:
+                y -= float(min(ylim))
+        return y
+
+    def _edit_full_data_from_click(self, event):
+        from straditize.straditizer import get_toolbar_mode
+
+        reader = self.reader
+        valid_axes = [ax for ax in [reader.ax, self.straditizer.ax]
+                      if ax is not None]
+        if (reader is None or reader._full_df is None or
+                event.inaxes not in valid_axes or event.ydata is None or
+                not (self._is_left_click(event.button) or
+                     self._is_right_click(event.button)) or
+                get_toolbar_mode(reader.ax.figure) != ''):
+            return
+
+        y = self._event_to_full_data_y(event)
+        if self._is_left_click(event.button):
+            changed = self._add_full_data_row(y)
+        else:
+            changed = self._remove_nearest_full_data_row(y)
+        if changed:
+            self._refresh_full_data_editor_and_plot()
+
     def _update_samples(self):
         if self._draw_sep:
             self.straditizer.update_samples_sep()
@@ -1627,6 +1821,10 @@ class DigitizingControl(StraditizerControlBase):
         tb.set_row_wand_mode()
         self.straditizer.draw_figure()
 
+    def remove_hlines_manually(self):
+        """Remove horizontal lines from user-defined endpoints."""
+        self._remove_lines_from_endpoints(vertical=False)
+
     def remove_yaxes(self):
         """Remove y-axes in the plot
 
@@ -1669,6 +1867,115 @@ class DigitizingControl(StraditizerControlBase):
         if not tb.wand_action.isChecked():
             tb.wand_action.setChecked(True)
         tb.set_col_wand_mode()
+        self.straditizer.draw_figure()
+
+    def remove_vlines_manually(self):
+        """Remove vertical lines from user-defined endpoints."""
+        self._remove_lines_from_endpoints(vertical=True)
+
+    def _parse_line_endpoints(self, text):
+        endpoints = []
+        float_pattern = r'[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?'
+        for i, raw in enumerate(filter(None, map(str.strip, text.splitlines())),
+                                start=1):
+            nums = re.findall(float_pattern, raw)
+            if len(nums) != 4:
+                raise ValueError(
+                    'Line %d: please provide exactly 4 numbers (x0,y0,x1,y1)'
+                    % i)
+            endpoints.append(tuple(map(float, nums)))
+        if not endpoints:
+            raise ValueError('No endpoints provided.')
+        return endpoints
+
+    @staticmethod
+    def _line_to_mask_indices(shape, x0, y0, x1, y1, width=1):
+        n = int(max(abs(x1 - x0), abs(y1 - y0))) + 1
+        xs = np.round(np.linspace(x0, x1, n)).astype(int)
+        ys = np.round(np.linspace(y0, y1, n)).astype(int)
+        radius = max(int(width) // 2, 0)
+        all_x = []
+        all_y = []
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                xx = xs + dx
+                yy = ys + dy
+                valid = ((xx >= 0) & (xx < shape[1]) &
+                         (yy >= 0) & (yy < shape[0]))
+                if np.any(valid):
+                    all_x.append(xx[valid])
+                    all_y.append(yy[valid])
+        if not all_x:
+            return np.array([], dtype=int), np.array([], dtype=int)
+        return np.concatenate(all_x), np.concatenate(all_y)
+
+    def _remove_lines_from_endpoints(self, vertical=False):
+        reader = self.reader
+        if reader is None:
+            return
+
+        title = 'Manual %s lines by endpoints' % (
+            'vertical' if vertical else 'horizontal')
+        help_txt = (
+            'Input one line per row: x0, y0, x1, y1\n'
+            'Example:\n'
+            '12, 34, 12, 180\n'
+            '45, 60, 220, 60')
+        text, ok = QInputDialog.getMultiLineText(
+            self.straditizer_widgets, title, help_txt)
+        if not ok:
+            return
+        try:
+            endpoints = self._parse_line_endpoints(text)
+        except ValueError as e:
+            QMessageBox.warning(self.straditizer_widgets, 'Invalid input',
+                                six.text_type(e))
+            return
+
+        extent = getattr(reader, 'extent', None)
+        xoff = int(np.ceil(extent[0])) if extent is not None else 0
+        yoff = int(np.ceil(min(extent[2:]))) if extent is not None else 0
+        width = max(1, self.sp_min_lw.value())
+        mask = np.zeros_like(reader.binary, dtype=bool)
+        removed = 0
+
+        for x0, y0, x1, y1 in endpoints:
+            dx = abs(x1 - x0)
+            dy = abs(y1 - y0)
+            if vertical and dy < dx:
+                continue
+            if not vertical and dx < dy:
+                continue
+            xx, yy = self._line_to_mask_indices(
+                reader.binary.shape, x0 - xoff, y0 - yoff, x1 - xoff,
+                y1 - yoff, width=width)
+            if len(xx):
+                mask[yy, xx] = True
+                removed += 1
+
+        if not removed:
+            QMessageBox.information(
+                self.straditizer_widgets, 'No matching lines',
+                'No %s lines matched the given endpoints.' % (
+                    'vertical' if vertical else 'horizontal'))
+            return
+
+        reader.binary[mask] = 0
+        reader.reset_labels()
+        if reader.plot_im is not None:
+            reader.plot_im.set_array(reader.labels)
+        if reader.magni_plot_im is not None:
+            reader.magni_plot_im.set_array(reader.labels)
+        reader.draw_figure()
+        self.straditizer_widgets.refresh()
+
+    def _start_manual_line_removal(self, vertical=False):
+        tb = self.selection_toolbar
+        tb.data_obj = 'Reader'
+        tb.start_selection(tb.data_obj.labels, rgba=tb.data_obj.image_array())
+        tb.remove_select_action.setChecked(True)
+        tb.select_action.setChecked(True)
+        tb.set_rect_select_mode()
         self.straditizer.draw_figure()
 
     def enable_occurences_selection(self):

@@ -468,6 +468,10 @@ class Straditizer(LabelSelection):
         ax = ax or self.ax
         if ax is None:
             fig = create_matplotlib_figure()
+            try:
+                fig.set_size_inches(12, 8, forward=True)
+            except TypeError:
+                fig.set_size_inches(12, 8)
             ax = fig.add_axes([0.1, 0.1, 0.9, 0.9])
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)

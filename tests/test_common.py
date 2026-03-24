@@ -40,8 +40,7 @@ class CommonHelpersTest(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 configure_runtime_warning_filters()
-
-        self.assertEqual(os.environ['JUPYTER_PLATFORM_DIRS'], '1')
+            self.assertEqual(os.environ['JUPYTER_PLATFORM_DIRS'], '1')
 
     def test_ensure_asyncio_event_loop_sets_missing_loop(self):
         sentinel = object()

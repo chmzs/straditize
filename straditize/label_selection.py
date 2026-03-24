@@ -29,6 +29,16 @@ import matplotlib.colors as mcol
 from straditize.common import docstrings
 
 
+def remove_objects_smaller_than(arr, min_size):
+    """Remove objects with size strictly smaller than ``min_size``."""
+    import skimage.morphology as skim
+    min_size = int(min_size)
+    if min_size <= 1:
+        return np.asarray(arr, dtype=bool)
+    return skim.remove_small_objects(
+        np.asarray(arr, dtype=bool), max_size=min_size - 1)
+
+
 class LabelSelection(object):
     """Class to provide selection functionalities for an image
 
@@ -200,7 +210,7 @@ class LabelSelection(object):
         if self._selection_arr is None:
             return
         arr = self.selected_part
-        arr &= ~skim.remove_small_objects(arr, n)
+        arr &= ~remove_objects_smaller_than(arr, n)
         if not arr.any():
             return
         labeled, num_labels = skim.label(

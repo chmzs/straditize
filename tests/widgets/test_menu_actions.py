@@ -222,7 +222,7 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         dialog.txt_fname.setText(fname)
         dialog.cb_include_meta.setChecked(False)
         dialog.cb_mode.setCurrentText('Linear interpolation')
-        dialog.cb_resolution.setCurrentText('Coarse')
+        dialog.txt_interval.setText('5')
         dialog.txt_index_name.setText('depth')
         dialog._export()
 
@@ -244,7 +244,7 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         dialog.txt_fname.setText(fname)
         dialog.cb_include_meta.setChecked(False)
         dialog.cb_mode.setCurrentText('Bin mean')
-        dialog.cb_resolution.setCurrentText('Coarse')
+        dialog.txt_interval.setText('10')
         dialog._export()
 
         exported = pd.read_csv(fname, index_col=0)
@@ -261,21 +261,21 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
             index=pd.Index(values, name='depth'))
 
         exported = ExportDfDialog.resample_dataframe(
-            df, mode='Sliding bin mean', preset='Coarse', index_name='depth')
+            df, mode='Sliding bin mean', interval=3.0, index_name='depth')
 
         self.assertEqual(exported.index.name, 'depth')
         self.assertLessEqual(len(exported), len(df))
         self.assertTrue(np.all(np.diff(exported.index.values) >= 0))
         self.assertGreater(exported.iloc[0, 0], df.iloc[0, 0])
 
-    def test_export_dialog_preserves_small_dataframe_for_large_preset(self):
-        """Presets larger than the source should leave the dataframe alone."""
+    def test_export_dialog_original_mode_preserves_small_dataframe(self):
+        """Original mode should leave the dataframe unchanged."""
         df = pd.DataFrame(
             {0: [1.0, 2.0], 1: [3.0, 4.0]},
             index=pd.Index([0.0, 1.0], name='depth'))
 
         exported = ExportDfDialog.resample_dataframe(
-            df, mode='Linear interpolation', preset='Fine',
+            df, mode='Original', interval=1.0,
             index_name='depth')
 
         self.assertFrameEqual(exported, df)
@@ -287,10 +287,27 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
             index=pd.Index([100.0, 110.0, 120.0, 130.0], name='age'))
 
         exported = ExportDfDialog.resample_dataframe(
-            df, mode='Bin mean', preset='Coarse', index_name='age')
+            df, mode='Bin mean', interval=15.0, index_name='age')
 
         self.assertEqual(exported.index.name, 'age')
         self.assertTrue(np.all(np.diff(exported.index.values) >= 0))
+
+    def test_export_dialog_defaults_index_name_to_age(self):
+        """Export defaults to age when the source index name is missing."""
+        self.init_reader()
+        self.reader.digitize()
+        dialog = ExportDfDialog.export_df(
+            self.straditizer_widgets, self.straditizer.full_df.rename_axis(None),
+            self.straditizer, exec_=False)
+        fname = self.get_random_filename(suffix='.csv')
+        dialog.txt_fname.setText(fname)
+        dialog.cb_include_meta.setChecked(False)
+        dialog.cb_mode.setCurrentText('Linear interpolation')
+        dialog.txt_interval.setText('8')
+        dialog._export()
+
+        exported = pd.read_csv(fname, index_col=0)
+        self.assertEqual(exported.index.name, 'age')
 
 
 if __name__ == '__main__':

@@ -23,6 +23,7 @@ import os.path as osp
 from straditize.common import (
     configure_runtime_warning_filters,
     configure_qt_opengl,
+    configure_qt_plugin_paths,
     ensure_asyncio_event_loop,
     patch_psyplot_gui_common,
     patch_psyplot_gui_asyncio,
@@ -82,6 +83,7 @@ def start_app(fname=None, output=None, xlim=None, ylim=None,
         patch_psyplot_gui_common()
         patch_psyplot_gui_entrypoints()
         patch_psyplot_gui_opengl()
+        configure_qt_plugin_paths()
         ensure_asyncio_event_loop()
         configure_qt_opengl(kwargs.get('opengl_implementation'))
         if exec_:

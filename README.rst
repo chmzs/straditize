@@ -41,7 +41,7 @@ Digitizing stratigraphic diagrams
 
 .. end-badges
 
-This refreshed ``0.2`` release focuses on reliable digitization on modern
+This refreshed ``0.2.2`` release focuses on reliable digitization on modern
 Python, pandas and matplotlib stacks while preserving the original
 stratigraphic workflow.
 
@@ -68,8 +68,8 @@ variables, the automatic and semi-automatic recognition of picture artifacts,
 as well an automatic measurement finder to exactly reproduce the data that has
 been used to create the diagram.
 
-Highlights in 0.2
------------------
+Highlights in 0.2.2
+-------------------
 
 * Modernized runtime compatibility for Python 3.10-3.14, pandas 2.3-3.0 and
   current matplotlib / psyplot-gui stacks.
@@ -77,6 +77,8 @@ Highlights in 0.2
   with exportable comparison data.
 * Better stacked-area sample inference via consensus interpolation.
 * Restored modern Excel / NetCDF export paths and several headless Qt fixes.
+* Repaired manual feature removal, interactive full-data editing and Windows
+  Qt startup behavior on the maintained desktop stack.
 
 Installation
 ------------
@@ -89,16 +91,18 @@ Recommended source install with ``pixi``::
     git clone https://github.com/Chilipp/straditize.git
     cd straditize
     pixi init
-    pixi add python=3.12 "numpy>=1.26" "pandas>=2.3" "matplotlib>=3.8" "scipy>=1.13" "xarray>=2024.7" "psyplot=1.5.1" "psyplot-gui=1.5.0" "pyqt=5.15" pyqtwebengine netcdf4 openpyxl scikit-image pillow
-    pixi run pip install -e .
-    pixi run straditize
+    pixi add python=3.12 "numpy>=1.26" "pandas>=2.3" "matplotlib>=3.8" "scipy>=1.13" "xarray>=2024.7" netcdf4 openpyxl scikit-image pillow
+    pixi add --pypi "psyplot>=1.5.1,<2.0" "psyplot-gui>=1.5.0,<2.0" "psy-strat>=0.1.1,<0.2" "pyqt5-qt5>=5.15.2,<5.16"
+    pixi run python -m pip install -e .
+    pixi run python -m straditize
 
 Alternative source install with ``mamba``/``conda``::
 
     git clone https://github.com/Chilipp/straditize.git
     cd straditize
-    mamba create -n straditize python=3.12 "numpy>=1.26" "pandas>=2.3" "matplotlib>=3.8" "scipy>=1.13" "xarray>=2024.7" "psyplot=1.5.1" "psyplot-gui=1.5.0" "pyqt=5.15" pyqtwebengine netcdf4 openpyxl scikit-image pillow pip
+    mamba create -n straditize python=3.12 "numpy>=1.26" "pandas>=2.3" "matplotlib>=3.8" "scipy>=1.13" "xarray>=2024.7" netcdf4 openpyxl scikit-image pillow pip
     mamba activate straditize
+    pip install "psyplot>=1.5.1,<2.0" "psyplot-gui>=1.5.0,<2.0" "psy-strat>=0.1.1,<0.2" "pyqt5-qt5>=5.15.2,<5.16"
     pip install -e .
 
 It can then be started from the command line via::
@@ -108,7 +112,7 @@ It can then be started from the command line via::
 Validated dependency stack
 --------------------------
 
-The ``0.2`` update has been verified with:
+The ``0.2.2`` update has been verified with:
 
 * Python 3.10 to 3.14
 * NumPy >= 1.26

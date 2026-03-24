@@ -81,6 +81,15 @@ def groupby_arr(arr):
     return keys, bounds
 
 
+def remove_objects_smaller_than(arr, min_size):
+    """Remove objects with size strictly smaller than ``min_size``."""
+    min_size = int(min_size)
+    if min_size <= 1:
+        return np.asarray(arr, dtype=bool)
+    return skim.remove_small_objects(
+        np.asarray(arr, dtype=bool), max_size=min_size - 1)
+
+
 class DataReader(LabelSelection):
     """A class to read in and digitize the data files of the pollen diagram
 
@@ -1473,7 +1482,8 @@ class DataReader(LabelSelection):
             n = int(mask.sum() * 2 * np.ceil(xs * 0.01))
             # look for connected small parts (such as axis ticks)
             labeled[arr.astype(bool) & np.isin(labeled, labels) &
-                    (~skim.remove_small_objects(labeled.astype(bool), n))] = 0
+                    (~remove_objects_smaller_than(
+                        labeled.astype(bool), n))] = 0
             full_mask[:ys_5p+1] = np.where(
                 arr.astype(bool) & ~labeled.astype(bool), True,
                 np.zeros_like(arr, dtype=bool))
@@ -1501,7 +1511,8 @@ class DataReader(LabelSelection):
             n = int(mask.sum() * 2 * np.ceil(xs * 0.01))
             # look for connected small parts (such as axis ticks)
             labeled[arr.astype(bool) & np.isin(labeled, labels) &
-                    (~skim.remove_small_objects(labeled.astype(bool), n))] = 0
+                    (~remove_objects_smaller_than(
+                        labeled.astype(bool), n))] = 0
             full_mask[-ys_5p:] = np.where(
                 arr.astype(bool) & ~labeled.astype(bool), True,
                 np.zeros_like(arr, dtype=bool))
@@ -1668,7 +1679,7 @@ class DataReader(LabelSelection):
         labels = labels[labels > 0]
         labeled[mask] = 0
         n = int(max_lw * 2 * np.ceil(len(binary) * 0.01))
-        small = labeled.astype(bool) & (~skim.remove_small_objects(
+        small = labeled.astype(bool) & (~remove_objects_smaller_than(
             labeled.astype(bool), n))
         thresh = np.ceil(0.02 * len(binary))
         labeled_small = skim.label(small)
@@ -3204,7 +3215,7 @@ class DataReader(LabelSelection):
         --------
         skimage.morphology.remove_small_objects"""
         arr = self.merged_binaries().astype(bool)
-        mask = arr & (~skim.remove_small_objects(arr, n))
+        mask = arr & (~remove_objects_smaller_than(arr, n))
         self._show_parts2remove(mask.astype(int), remove, **kwargs)
 
     @docstrings.get_sections(base='DataReader.get_parts_at_column_ends')

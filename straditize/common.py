@@ -125,6 +125,38 @@ def configure_qt_opengl(opengl_implementation=None):
     return True
 
 
+def configure_qt_plugin_paths():
+    """Ensure Qt plugin lookup points to the active PyQt runtime.
+
+    Some IDEs/shells leak empty or stale ``QT_*`` environment variables that
+    make Qt fail with "platform plugin could be initialized" on Windows.
+    """
+    try:
+        from PyQt5.QtCore import QLibraryInfo
+    except ImportError:
+        return False
+
+    plugins_path = QLibraryInfo.location(QLibraryInfo.PluginsPath)
+    prefix_path = QLibraryInfo.location(QLibraryInfo.PrefixPath)
+    if not plugins_path:
+        return False
+
+    platforms_path = os.path.join(plugins_path, 'platforms')
+    existing_platforms = os.environ.get('QT_QPA_PLATFORM_PLUGIN_PATH')
+    if not existing_platforms or not os.path.isdir(existing_platforms):
+        os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = platforms_path
+
+    existing_plugins = os.environ.get('QT_PLUGIN_PATH')
+    if not existing_plugins or not os.path.isdir(existing_plugins):
+        os.environ['QT_PLUGIN_PATH'] = plugins_path
+
+    if os.name == 'nt' and hasattr(os, 'add_dll_directory') and prefix_path:
+        qt_bin = os.path.join(prefix_path, 'bin')
+        if os.path.isdir(qt_bin):
+            os.add_dll_directory(qt_bin)
+    return True
+
+
 def ensure_asyncio_event_loop():
     """Return a usable event loop for GUI startup on modern Python versions.
 

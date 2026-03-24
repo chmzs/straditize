@@ -2,12 +2,14 @@
 import numpy as np
 import pandas as pd
 import warnings
+from types import SimpleNamespace
 from itertools import chain
 from unittest import mock
 from straditize import binary
 import os.path as osp
 import _base_testing as bt
 import unittest
+from matplotlib.backend_bases import MouseButton
 from psyplot_gui.compat.qtcompat import QTest, Qt
 
 
@@ -33,6 +35,22 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertBinaryImageEquals(
             self.reader.binary,
             self.get_fig_path('basic_diagram_yaxes_removed.png'))
+
+    def test_remove_yaxes_without_min_size_futurewarning(self):
+        """Y-axis removal should avoid deprecated min_size API usage."""
+        self.init_reader('basic_diagram_yaxes.png', xlim=np.array([9., 27.]))
+        self.reader.column_starts = np.array([0, 7, 15])
+        self.straditizer_widgets.refresh()
+        self.digitizer.txt_line_fraction.setText('30')
+        self.digitizer.cb_max_lw.setChecked(False)
+        self.digitizer.sp_min_lw.setValue(1)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always', FutureWarning)
+            QTest.mouseClick(self.digitizer.btn_remove_yaxes,
+                             Qt.LeftButton)
+        self.assertFalse(
+            any('min_size' in str(w.message) for w in caught),
+            msg=[str(w.message) for w in caught])
 
     def test_remove_vlines(self):
         """Test the removing of vertical lines
@@ -90,6 +108,51 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertBinaryImageEquals(
             self.reader.binary,
             self.get_fig_path('basic_diagram_hlines_removed.png'))
+
+    def test_remove_hlines_manually_from_endpoints(self):
+        """Manual hline removal should accept endpoint input and remove data."""
+        self.init_reader('basic_diagram_hlines.png')
+        self.straditizer_widgets.refresh()
+        text = '0, 0, 10, 0'
+        with mock.patch(
+                'straditize.widgets.data.QInputDialog.getMultiLineText',
+                return_value=(text, True)), mock.patch.object(
+                self.digitizer, '_line_to_mask_indices',
+                return_value=(np.array([0]), np.array([0]))), mock.patch.object(
+                self.reader, 'reset_labels') as reset_labels:
+            self.digitizer.remove_hlines_manually()
+        self.assertTrue(reset_labels.called)
+
+    def test_edit_full_data_opens_editor(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+        editor.close()
+
+    def test_edit_full_data_click_add_and_remove_row(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        low_y = float(self.reader._full_df.index.min()) - 10.0
+        add_event = SimpleNamespace(
+            inaxes=self.straditizer.ax,
+            ydata=low_y + min(self.straditizer.data_ylim),
+            button=MouseButton.LEFT)
+        self.digitizer._edit_full_data_from_click(add_event)
+        self.assertIn(int(np.round(low_y)), self.reader._full_df.index)
+
+        del_event = SimpleNamespace(
+            inaxes=self.straditizer.ax,
+            ydata=low_y + min(self.straditizer.data_ylim),
+            button=MouseButton.RIGHT)
+        self.digitizer._edit_full_data_from_click(del_event)
+        self.assertNotIn(int(np.round(low_y)), self.reader._full_df.index)
+        editor.close()
 
     def test_remove_disconnected_01_from0(self):
         """Test the removing of disconnected features
