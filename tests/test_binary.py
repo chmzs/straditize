@@ -13,6 +13,7 @@ from straditize import binary
 import pandas as pd
 import create_test_sample as ct
 import matplotlib as mpl
+from PIL import Image
 
 mpl.use('module://psyplot_gui.backend')
 
@@ -108,6 +109,43 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
                  'missing: %s') % (
                     reader_extrema, extrema,
                     sorted(set(extrema) - set(flattened))))
+
+    def test_standard_extraction_mode_still_drops_light_overlay_pixels(self):
+        """The default extraction mode should keep the historic thresholding."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [255, 220, 220, 255],
+            [180, 0, 0, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+
+        mask = binary.DataReader.to_binary_pil(image)
+
+        self.assertEqual(mask.tolist(), [[0, 0, 1]])
+
+    def test_light_overlay_white_mode_preserves_pale_colored_pixels(self):
+        """Light-overlay mode should keep pale colored pixels on white."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [255, 220, 220, 255],
+            [180, 0, 0, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+
+        mask = binary.DataReader.to_binary_pil(
+            image, extraction_mode='light-overlay-white')
+
+        self.assertEqual(mask.tolist(), [[0, 1, 1]])
+
+    def test_reader_accepts_explicit_extraction_mode(self):
+        """Readers should store the requested extraction mode."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [255, 220, 220, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False,
+                                   extraction_mode='light-overlay-white')
+
+        self.assertEqual(reader.extraction_mode, 'light-overlay-white')
 
     def test_obstacle_01_alternation_min(self):
         """Test whether the alternation is identified correctly in a minimum"""

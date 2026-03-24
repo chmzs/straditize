@@ -122,6 +122,20 @@ class DataReader(LabelSelection):
     #: the matplotlib image artist
     plot_im = None
 
+    #: Extraction mode used to separate signal from background.
+    extraction_mode = 'standard'
+
+    #: Supported foreground extraction modes for future UI wiring.
+    EXTRACTION_MODES = {
+        'standard': 'standard',
+        'light-overlay-white': 'light-overlay-white',
+        'light overlay on white background': 'light-overlay-white',
+        'dark-ink-light': 'dark-ink-light',
+        'dark ink on light background': 'dark-ink-light',
+        'light-ink-dark': 'light-ink-dark',
+        'light ink on dark background': 'light-ink-dark',
+    }
+
     #: magnified :attr:`plot_im`
     magni_plot_im = None
 
@@ -472,7 +486,8 @@ class DataReader(LabelSelection):
     @docstrings.get_sections(base='DataReader')
     def __init__(self, image, ax=None, extent=None,
                  plot=True, children=[], parent=None, magni=None,
-                 plot_background=False, binary=None):
+                 plot_background=False, binary=None,
+                 extraction_mode='standard'):
         """
         Parameters
         ----------
@@ -499,6 +514,7 @@ class DataReader(LabelSelection):
             :meth:`to_binary_pil` method is used with the given `image`
         """
         from PIL import Image
+        self.extraction_mode = self.normalize_extraction_mode(extraction_mode)
         if binary is not None:
             self.binary = binary
         if np.ndim(image) == 2:
@@ -510,7 +526,8 @@ class DataReader(LabelSelection):
             rgba[..., -1] = 255
             image = rgba
         elif binary is None:
-                self.binary = self.to_binary_pil(image)
+                self.binary = self.to_binary_pil(
+                    image, extraction_mode=self.extraction_mode)
 
         try:
             mode = image.mode
@@ -566,7 +583,8 @@ class DataReader(LabelSelection):
 
             if not binary:
                 self.image = image
-            self.binary = self.to_binary_pil(image)
+            self.binary = self.to_binary_pil(
+                image, extraction_mode=self.extraction_mode)
             self.reset_labels()
             if self.plot_im is not None:
                 self.update_image(None, None)
@@ -1298,8 +1316,46 @@ class DataReader(LabelSelection):
             p.remove()
         del self._selected_cols
 
+    @classmethod
+    def normalize_extraction_mode(cls, extraction_mode):
+        """Normalize an extraction-mode string to the internal identifier."""
+        if extraction_mode is None:
+            extraction_mode = 'standard'
+        key = six.text_type(extraction_mode).strip().lower()
+        try:
+            return cls.EXTRACTION_MODES[key]
+        except KeyError:
+            raise ValueError('Unknown extraction mode: %s' % extraction_mode)
+
     @staticmethod
-    def to_grey_pil(image, threshold=230 * 3):
+    def _light_overlay_colored_mask(rgb):
+        """Detect pale but still chromatic pixels on a light background."""
+        rgb = np.asarray(rgb, dtype=float)
+        maxc = rgb.max(axis=-1)
+        minc = rgb.min(axis=-1)
+        saturation = np.divide(
+            maxc - minc, maxc,
+            out=np.zeros_like(maxc, dtype=float), where=maxc > 0)
+        return saturation >= 0.08
+
+    @classmethod
+    def _foreground_alpha_mask(cls, arr, threshold=230 * 3,
+                               extraction_mode='standard'):
+        """Return the RGBA-aware foreground mask for the requested mode."""
+        extraction_mode = cls.normalize_extraction_mode(extraction_mode)
+        rgb = arr[..., :-1]
+        alpha = arr[..., -1] > 0
+        if extraction_mode in ['standard', 'dark-ink-light',
+                               'light-ink-dark']:
+            return alpha & (rgb.sum(axis=-1) <= threshold)
+        if extraction_mode == 'light-overlay-white':
+            bright = rgb.sum(axis=-1) > threshold
+            colored = cls._light_overlay_colored_mask(rgb)
+            return alpha & (~bright | colored)
+        return alpha & (rgb.sum(axis=-1) <= threshold)
+
+    @classmethod
+    def to_grey_pil(cls, image, threshold=230 * 3, extraction_mode='standard'):
         """Convert an image to a greyscale image
 
         Parameters
@@ -1315,14 +1371,15 @@ class DataReader(LabelSelection):
         np.ndarray of ndim 2
             The greyscale image of integer type"""
         arr = np.asarray(image, dtype=int)
-        alpha = arr[..., -1]
-        alpha[(alpha == 0) | (arr[..., :-1].sum(axis=-1) > threshold)] = 0
+        foreground = cls._foreground_alpha_mask(
+            arr, threshold=threshold, extraction_mode=extraction_mode)
         ret = np.array(image.convert('L'), dtype=int) + 1
-        ret[(alpha == 0) | (ret > 255)] = 0
+        ret[(~foreground) | (ret > 255)] = 0
         return ret
 
-    @staticmethod
-    def to_binary_pil(image, threshold=230 * 3):
+    @classmethod
+    def to_binary_pil(cls, image, threshold=230 * 3,
+                      extraction_mode='standard'):
         """Convert an image to a binary
 
         Parameters
@@ -1337,7 +1394,8 @@ class DataReader(LabelSelection):
         -------
         np.ndarray of ndim 2
             The binary image of integer type"""
-        grey = DataReader.to_grey_pil(image, threshold)
+        grey = cls.to_grey_pil(
+            image, threshold, extraction_mode=extraction_mode)
         grey[grey > 0] = 1
         return grey
 
