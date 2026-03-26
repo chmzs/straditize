@@ -81,6 +81,7 @@ Documentation
     tutorial/index
     contribute
     command_line
+    segmentation_pipeline
     gui/straditize
     api/straditize
     changelog

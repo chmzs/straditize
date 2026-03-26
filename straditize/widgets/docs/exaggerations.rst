@@ -35,10 +35,22 @@ digitization control.
    the diagram that represent the exaggerations. When you're done with this,
    click the :guilabel:`Select` button. You can also repeat this step to select
    more and more features.
-5. Specify when the exaggerations should be used. This can be either where the
-   unexaggerated data is below a certain percentage of the image width and/or
-   below a certain number of pixels.
-6. When you now click the :guilabel:`Digitize exaggerations` button (but after
-   you clicked the :guilabel:`Digitize` button for the original reader), the
-   exaggerations will be digitized and merged into the digitization result of
-   the non-exaggerated reader.
+5. Select a merge mode. The default is
+   :guilabel:`Selected region priority`, which uses values from the selected
+   exaggeration regions whenever valid exaggerated data exists. You can still
+   use :guilabel:`Threshold merge (legacy)` to preserve the classic behavior
+   with percentage/pixel thresholds.
+6. Click :guilabel:`Digitize` for the original reader.
+7. Click :guilabel:`Digitize exaggerations`. Straditize now opens a mandatory
+   preview overlay (primary, exaggerated/factor, merged). Only after pressing
+   :guilabel:`Apply` in the confirmation dialog are merged values written into
+   the current full data.
+
+Notes
+-----
+
+- If no exaggeration pixels are selected yet, the button remains available and
+  shows a recovery message that guides you back to
+  :guilabel:`Select exaggerations`.
+- Switching merge mode can change existing merged results; the GUI asks for
+  confirmation before applying a different mode.

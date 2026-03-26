@@ -121,6 +121,14 @@ def configure_qt_opengl(opengl_implementation=None):
     patch_psyplot_gui_opengl()
     if QCoreApplication.instance() is not None:
         return False
+    if opengl_implementation is None:
+        # Do not force software OpenGL for regular desktop sessions.
+        # Keep the software fallback only for explicit offscreen/testing runs.
+        qpa = os.environ.get('QT_QPA_PLATFORM', '').strip().lower()
+        if qpa == 'offscreen' or getattr(psyplot_gui, 'UNIT_TESTING', False):
+            opengl_implementation = 'software'
+        else:
+            return False
     psyplot_gui._set_opengl_implementation(opengl_implementation)
     return True
 

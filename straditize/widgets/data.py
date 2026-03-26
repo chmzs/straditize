@@ -65,6 +65,18 @@ extraction_mode_items = [
 ]
 extraction_mode_labels = dict(extraction_mode_items)
 
+segmentation_mode_items = [
+    ('Auto', 'auto'),
+    ('Guided', 'guided'),
+]
+segmentation_mode_labels = dict(segmentation_mode_items)
+
+merge_mode_items = [
+    ('Selected region priority', 'selected-priority'),
+    ('Threshold merge (legacy)', 'threshold-legacy'),
+]
+merge_mode_labels = dict(merge_mode_items)
+
 
 def get_extraction_mode_label(mode):
     """Return the user-facing label for an extraction mode identifier."""
@@ -73,6 +85,24 @@ def get_extraction_mode_label(mode):
         if value == mode:
             return label
     return 'Standard'
+
+
+def get_segmentation_mode_label(mode):
+    """Return the user-facing label for a segmentation mode identifier."""
+    mode = binary.DataReader.normalize_segmentation_mode(mode)
+    for label, value in segmentation_mode_items:
+        if value == mode:
+            return label
+    return 'Auto'
+
+
+def get_merge_mode_label(mode):
+    """Return the user-facing label for an exaggeration merge mode."""
+    mode = binary.DataReader.normalize_exaggeration_merge_mode(mode)
+    for label, value in merge_mode_items:
+        if value == mode:
+            return label
+    return 'Selected region priority'
 
 
 def int_list2str(numbers):
@@ -155,6 +185,21 @@ class DigitizingControl(StraditizerControlBase):
     #: Combobox for selecting the extraction mode of the main reader
     cb_extraction_mode = None
 
+    #: Combobox for selecting the segmentation mode of the main reader
+    cb_segmentation_mode = None
+
+    #: Line edit for target colors of the main reader
+    txt_target_colors = None
+
+    #: Button to pick target colors from the current image
+    btn_pick_target_color = None
+
+    #: Button to remove the last target color entry
+    btn_pop_target_color = None
+
+    #: Button to clear all target colors
+    btn_clear_target_colors = None
+
     #: Button for initializing the reader
     btn_init_reader = None
 
@@ -189,6 +234,24 @@ class DigitizingControl(StraditizerControlBase):
 
     #: A QComboBox to select the extraction mode for exaggerations
     cb_exag_extraction_mode = None
+
+    #: A QComboBox to select the segmentation mode for exaggerations
+    cb_exag_segmentation_mode = None
+
+    #: Line edit for exaggeration target colors
+    txt_exag_target_colors = None
+
+    #: Button to pick exaggeration target colors from the current image
+    btn_pick_exag_target_color = None
+
+    #: Button to remove the last exaggeration target color entry
+    btn_pop_exag_target_color = None
+
+    #: Button to clear all exaggeration target colors
+    btn_clear_exag_target_colors = None
+
+    #: A QComboBox to select the exaggeration merge mode
+    cb_exag_merge_mode = None
 
     #: Button to add an exaggerations reader
     btn_new_exaggeration = None
@@ -391,6 +454,23 @@ class DigitizingControl(StraditizerControlBase):
         cb.setEditable(False)
         cb.addItems([label for label, _ in extraction_mode_items])
         cb.setCurrentText('Standard')
+        self.cb_segmentation_mode = cb = QComboBox()
+        cb.setEditable(False)
+        cb.addItems([label for label, _ in segmentation_mode_items])
+        cb.setCurrentText('Auto')
+        self.txt_target_colors = QLineEdit()
+        self.txt_target_colors.setPlaceholderText('#RRGGBB, #RRGGBB')
+        self.txt_target_colors.setToolTip(
+            'Optional target colors for guided segmentation.')
+        self.btn_pick_target_color = QPushButton('Pick color')
+        self.btn_pick_target_color.setToolTip(
+            'Pick a target color from the current reader image.')
+        self.btn_pop_target_color = QPushButton('Remove last')
+        self.btn_pop_target_color.setToolTip(
+            'Remove the last target color entry.')
+        self.btn_clear_target_colors = QPushButton('Clear')
+        self.btn_clear_target_colors.setToolTip(
+            'Clear all target colors for the main reader.')
 
         self.btn_init_reader = QPushButton('Convert image')
         self.btn_init_reader.setToolTip(
@@ -440,6 +520,27 @@ class DigitizingControl(StraditizerControlBase):
         cb.setEditable(False)
         cb.addItems([label for label, _ in extraction_mode_items])
         cb.setCurrentText('Standard')
+        self.cb_exag_segmentation_mode = cb = QComboBox()
+        cb.setEditable(False)
+        cb.addItems([label for label, _ in segmentation_mode_items])
+        cb.setCurrentText('Auto')
+        self.txt_exag_target_colors = QLineEdit()
+        self.txt_exag_target_colors.setPlaceholderText('#RRGGBB, #RRGGBB')
+        self.txt_exag_target_colors.setToolTip(
+            'Optional target colors for guided exaggeration selection.')
+        self.btn_pick_exag_target_color = QPushButton('Pick color')
+        self.btn_pick_exag_target_color.setToolTip(
+            'Pick exaggeration target colors from the main reader image.')
+        self.btn_pop_exag_target_color = QPushButton('Remove last')
+        self.btn_pop_exag_target_color.setToolTip(
+            'Remove the last exaggeration target color entry.')
+        self.btn_clear_exag_target_colors = QPushButton('Clear')
+        self.btn_clear_exag_target_colors.setToolTip(
+            'Clear all target colors for exaggerations.')
+        self.cb_exag_merge_mode = cb = QComboBox()
+        cb.setEditable(False)
+        cb.addItems([label for label, _ in merge_mode_items])
+        cb.setCurrentText('Selected region priority')
 
         self.btn_new_exaggeration = QPushButton('+')
         self.btn_select_exaggerations = QPushButton('Select exaggerations')
@@ -632,8 +733,14 @@ class DigitizingControl(StraditizerControlBase):
         self.widgets2disable = [
             self.btn_column_starts, self.btn_column_ends,
             self.cb_readers, self.btn_new_child_reader,
+            self.cb_segmentation_mode, self.txt_target_colors,
+            self.btn_pick_target_color, self.btn_pop_target_color,
+            self.btn_clear_target_colors,
             self.txt_exag_factor, self.cb_exag_reader_type,
-            self.cb_exag_extraction_mode,
+            self.cb_exag_extraction_mode, self.cb_exag_segmentation_mode,
+            self.txt_exag_target_colors, self.btn_pick_exag_target_color,
+            self.btn_pop_exag_target_color, self.btn_clear_exag_target_colors,
+            self.cb_exag_merge_mode,
             self.txt_exag_percentage, self.txt_exag_absolute,
             self.btn_digitize_exag,
             self.btn_new_exaggeration, self.btn_select_exaggerations,
@@ -672,6 +779,28 @@ class DigitizingControl(StraditizerControlBase):
         self.btn_init_reader.clicked.connect(self.init_reader)
         self.btn_digitize.clicked.connect(self.digitize)
         self.btn_digitize_exag.clicked.connect(self.digitize_exaggerations)
+        self.cb_segmentation_mode.currentTextChanged.connect(
+            self.update_reader_segmentation_settings)
+        self.txt_target_colors.editingFinished.connect(
+            self.update_reader_segmentation_settings)
+        self.btn_pick_target_color.clicked.connect(
+            lambda: self.start_pick_target_color(False))
+        self.btn_pop_target_color.clicked.connect(
+            lambda: self.remove_last_target_color(False))
+        self.btn_clear_target_colors.clicked.connect(
+            lambda: self.clear_target_colors(False))
+        self.cb_exag_segmentation_mode.currentTextChanged.connect(
+            self.update_exaggeration_settings)
+        self.txt_exag_target_colors.editingFinished.connect(
+            self.update_exaggeration_settings)
+        self.cb_exag_merge_mode.currentTextChanged.connect(
+            self.on_exag_merge_mode_changed)
+        self.btn_pick_exag_target_color.clicked.connect(
+            lambda: self.start_pick_target_color(True))
+        self.btn_pop_exag_target_color.clicked.connect(
+            lambda: self.remove_last_target_color(True))
+        self.btn_clear_exag_target_colors.clicked.connect(
+            lambda: self.clear_target_colors(True))
         self.btn_digitize.clicked.connect(self.straditizer_widgets.refresh)
         self.btn_remove_yaxes.clicked.connect(self.remove_yaxes)
         self.btn_remove_xaxes.clicked.connect(self.remove_xaxes)
@@ -744,24 +873,239 @@ class DigitizingControl(StraditizerControlBase):
         for w in [self.btn_init_reader, self.btn_digitize]:
             w.setEnabled(self.should_be_enabled(w))
         self.enable_or_disable_btn_highlight_small_selection()
-        if (self.straditizer is not None and
-                self.straditizer.data_reader is not None):
-            self.cb_reader_type.setCurrentText(get_reader_name(
-                self.straditizer.data_reader))
-            self.cb_extraction_mode.setCurrentText(get_extraction_mode_label(
-                self.straditizer.data_reader.extraction_mode))
-            reader = self.straditizer.data_reader.exaggerated_reader
-            self.cb_exag_reader_type.setCurrentText(get_reader_name(
-                reader or self.straditizer.data_reader))
-            self.cb_exag_extraction_mode.setCurrentText(
-                get_extraction_mode_label(
-                    getattr(reader or self.straditizer.data_reader,
-                            'extraction_mode', 'standard')))
-            if reader is not None:
-                self.txt_exag_factor.setText(str(reader.is_exaggerated))
-            self.txt_occurences_value.setText(
-                str(self.straditizer.data_reader.occurences_value))
+        synced_widgets = [
+            self.cb_segmentation_mode, self.txt_target_colors,
+            self.cb_exag_segmentation_mode, self.txt_exag_target_colors,
+            self.cb_exag_merge_mode,
+        ]
+        old_blocks = [w.blockSignals(True) for w in synced_widgets]
+        try:
+            if (self.straditizer is not None and
+                    self.straditizer.data_reader is not None):
+                base_reader = self.straditizer.data_reader
+                if base_reader.is_exaggerated:
+                    base_reader = base_reader.non_exaggerated_reader
+                self.cb_reader_type.setCurrentText(get_reader_name(base_reader))
+                self.cb_extraction_mode.setCurrentText(
+                    get_extraction_mode_label(base_reader.extraction_mode))
+                self.cb_segmentation_mode.setCurrentText(
+                    get_segmentation_mode_label(base_reader.segmentation_mode))
+                self.txt_target_colors.setText(
+                    ', '.join(base_reader.target_colors))
+                reader = base_reader.exaggerated_reader
+                self.cb_exag_reader_type.setCurrentText(get_reader_name(
+                    reader or base_reader))
+                self.cb_exag_extraction_mode.setCurrentText(
+                    get_extraction_mode_label(
+                        getattr(reader or base_reader,
+                                'extraction_mode', 'standard')))
+                self.cb_exag_segmentation_mode.setCurrentText(
+                    get_segmentation_mode_label(
+                        getattr(reader or base_reader,
+                                'segmentation_mode', 'auto')))
+                self.txt_exag_target_colors.setText(', '.join(
+                    getattr(reader or base_reader, 'target_colors', [])))
+                self.cb_exag_merge_mode.setCurrentText(
+                    get_merge_mode_label(
+                        getattr(reader or base_reader,
+                                'exaggeration_merge_mode',
+                                'selected-priority')))
+                if reader is not None:
+                    self.txt_exag_factor.setText(str(reader.is_exaggerated))
+                self.txt_occurences_value.setText(
+                    str(base_reader.occurences_value))
+                legacy = (getattr(reader or base_reader,
+                                  'exaggeration_merge_mode',
+                                  'selected-priority') == 'threshold-legacy')
+                self.txt_exag_percentage.setEnabled(legacy)
+                self.txt_exag_absolute.setEnabled(legacy)
+            else:
+                self.cb_extraction_mode.setCurrentText(
+                    get_extraction_mode_label('standard'))
+                self.cb_segmentation_mode.setCurrentText(
+                    get_segmentation_mode_label('auto'))
+                self.txt_target_colors.setText('')
+                self.cb_exag_extraction_mode.setCurrentText(
+                    get_extraction_mode_label('standard'))
+                self.cb_exag_segmentation_mode.setCurrentText(
+                    get_segmentation_mode_label('auto'))
+                self.txt_exag_target_colors.setText('')
+                self.cb_exag_merge_mode.setCurrentText(
+                    get_merge_mode_label('selected-priority'))
+                self.txt_exag_percentage.setEnabled(False)
+                self.txt_exag_absolute.setEnabled(False)
+        finally:
+            for widget, old in zip(synced_widgets, old_blocks):
+                widget.blockSignals(old)
         self.fill_cb_readers()
+
+    def _base_reader(self):
+        """Return the non-exaggerated reader currently controlled by the UI."""
+        if self.straditizer is None:
+            return None
+        reader = self.straditizer.data_reader
+        if reader is not None and reader.is_exaggerated:
+            reader = reader.non_exaggerated_reader
+        return reader
+
+    @staticmethod
+    def _append_color_text(existing, color):
+        existing_colors = binary.DataReader.normalize_target_colors(existing)
+        colors = binary.DataReader.normalize_target_colors(
+            list(existing_colors) + [color])
+        return ', '.join(colors)
+
+    @staticmethod
+    def _pop_color_text(existing):
+        colors = binary.DataReader.normalize_target_colors(existing)
+        if colors:
+            colors = colors[:-1]
+        return ', '.join(colors)
+
+    def _show_invalid_color_message(self, exc):
+        QMessageBox.warning(
+            self.straditizer_widgets, 'Invalid color list',
+            six.text_type(exc))
+
+    def remove_last_target_color(self, exaggeration=False):
+        if exaggeration:
+            widget = self.txt_exag_target_colors
+        else:
+            widget = self.txt_target_colors
+        try:
+            widget.setText(self._pop_color_text(widget.text()))
+        except ValueError as exc:
+            self._show_invalid_color_message(exc)
+            return
+        if exaggeration:
+            self.update_exaggeration_settings()
+        else:
+            self.update_reader_segmentation_settings()
+
+    def clear_target_colors(self, exaggeration=False):
+        if exaggeration:
+            self.txt_exag_target_colors.setText('')
+            self.update_exaggeration_settings()
+        else:
+            self.txt_target_colors.setText('')
+            self.update_reader_segmentation_settings()
+
+    def update_reader_segmentation_settings(self, *args):
+        """Synchronize main reader segmentation settings from the GUI."""
+        reader = self._base_reader()
+        if reader is None:
+            return
+        reader.segmentation_mode = segmentation_mode_labels[
+            self.cb_segmentation_mode.currentText()]
+        try:
+            reader.target_colors = binary.DataReader.normalize_target_colors(
+                self.txt_target_colors.text())
+        except ValueError as exc:
+            self._show_invalid_color_message(exc)
+            return
+
+    def update_exaggeration_settings(self, *args):
+        """Synchronize exaggeration segmentation and merge settings."""
+        reader = self._base_reader()
+        if reader is None:
+            return
+        exag = reader.exaggerated_reader
+        merge_mode = merge_mode_labels[self.cb_exag_merge_mode.currentText()]
+        legacy = merge_mode == 'threshold-legacy'
+        self.txt_exag_percentage.setEnabled(legacy)
+        self.txt_exag_absolute.setEnabled(legacy)
+        if exag is None:
+            return
+        exag.segmentation_mode = segmentation_mode_labels[
+            self.cb_exag_segmentation_mode.currentText()]
+        try:
+            exag.target_colors = binary.DataReader.normalize_target_colors(
+                self.txt_exag_target_colors.text())
+        except ValueError as exc:
+            self._show_invalid_color_message(exc)
+            return
+        exag.exaggeration_merge_mode = merge_mode
+
+    def on_exag_merge_mode_changed(self, *args):
+        """Prompt before switching merge mode when results already exist."""
+        reader = self._base_reader()
+        if reader is None or reader.exaggerated_reader is None:
+            self.update_exaggeration_settings()
+            return
+        exag = reader.exaggerated_reader
+        new_mode = merge_mode_labels[self.cb_exag_merge_mode.currentText()]
+        old_mode = getattr(exag, 'exaggeration_merge_mode', 'selected-priority')
+        if new_mode != old_mode and reader.full_df is not None:
+            ret = QMessageBox.question(
+                self.straditizer_widgets, 'Switch merge mode',
+                'Switching merge mode can change the digitized result. '
+                'Apply the new mode?',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if ret != QMessageBox.Yes:
+                self.cb_exag_merge_mode.blockSignals(True)
+                self.cb_exag_merge_mode.setCurrentText(
+                    get_merge_mode_label(old_mode))
+                self.cb_exag_merge_mode.blockSignals(False)
+                self.update_exaggeration_settings()
+                return
+        self.update_exaggeration_settings()
+
+    def start_pick_target_color(self, exaggeration=False):
+        """Activate one-shot target color picking on the current figure."""
+        reader = self._base_reader()
+        if reader is None or reader.ax is None:
+            return
+        try:
+            reader.ax.figure.canvas.mpl_disconnect(self._target_color_pick_cid)
+        except AttributeError:
+            pass
+        self._target_color_pick_exaggeration = exaggeration
+        self._target_color_pick_cid = reader.ax.figure.canvas.mpl_connect(
+            'button_press_event', self._pick_target_color_from_event)
+
+    def _pick_target_color_from_event(self, event):
+        """Append the clicked pixel color to the appropriate target list."""
+        reader = self._base_reader()
+        if reader is None or event.inaxes is not reader.ax:
+            return
+        arr = np.asarray(reader.image)
+        height, width = arr.shape[:2]
+        if reader.extent is None:
+            xmin, xmax = 0, width
+            ymin, ymax = 0, height
+        else:
+            xmin, xmax, ymin, ymax = reader.extent
+        xspan = xmax - xmin or 1
+        yspan = ymax - ymin or 1
+        col = int(np.clip((event.xdata - xmin) / float(xspan) * width,
+                          0, width - 1))
+        row = int(np.clip((event.ydata - ymin) / float(yspan) * height,
+                          0, height - 1))
+        rgb = arr[row, col, :3]
+        color = '#%02X%02X%02X' % tuple(map(int, rgb))
+        try:
+            reader.ax.figure.canvas.mpl_disconnect(self._target_color_pick_cid)
+            del self._target_color_pick_cid
+        except AttributeError:
+            pass
+        if getattr(self, '_target_color_pick_exaggeration', False):
+            try:
+                self.txt_exag_target_colors.setText(
+                    self._append_color_text(
+                        self.txt_exag_target_colors.text(), color))
+            except ValueError as exc:
+                self._show_invalid_color_message(exc)
+                return
+            self.update_exaggeration_settings()
+        else:
+            try:
+                self.txt_target_colors.setText(
+                    self._append_color_text(self.txt_target_colors.text(),
+                                            color))
+            except ValueError as exc:
+                self._show_invalid_color_message(exc)
+                return
+            self.update_reader_segmentation_settings()
 
     def toggle_sp_max_lw(self, state):
         """Toggle :attr:`sp_max_lw` based on :attr:`cb_max_lw`
@@ -891,24 +1235,39 @@ class DigitizingControl(StraditizerControlBase):
             return False
         elif w in [self.btn_select_data]:
             return True
+        elif w in [self.cb_segmentation_mode, self.txt_target_colors,
+                   self.btn_pop_target_color, self.btn_clear_target_colors]:
+            return not (self.straditizer.data_xlim is None or
+                        self.straditizer.data_ylim is None)
         elif w is self.btn_init_reader:
             if (self.straditizer.data_xlim is None or
                     self.straditizer.data_ylim is None):
                 return False
+            return True
         elif (self.straditizer.data_xlim is None or
-              self.straditizer.data_ylim is None or
-              self.straditizer.data_reader is None):
+              self.straditizer.data_ylim is None):
+            return False
+        base_reader = self._base_reader()
+        if base_reader is None:
             return False
         elif (w is self.btn_highlight_small_selection and
               not self.selection_toolbar._selecting):
             return False
+        elif (w is self.btn_pick_target_color and
+              (base_reader.ax is None or base_reader.image is None)):
+            return False
         # widgets depending on that the columns have been set already
-        elif (self.straditizer.data_reader._column_starts is None and
+        elif (base_reader._column_starts is None and
               w in [self.btn_reset_columns, self.btn_align_vertical,
                     self.btn_column_ends,
                     self.cb_readers, self.btn_new_child_reader,
                     self.cb_exag_reader_type, self.btn_new_exaggeration,
-                    self.cb_exag_extraction_mode, self.txt_exag_factor,
+                    self.cb_exag_extraction_mode,
+                    self.cb_exag_segmentation_mode,
+                    self.txt_exag_target_colors, self.btn_pick_exag_target_color,
+                    self.btn_pop_exag_target_color,
+                    self.btn_clear_exag_target_colors,
+                    self.txt_exag_factor,
                     self.txt_exag_absolute,
                     self.txt_exag_percentage, self.btn_digitize_exag,
                     self.btn_show_disconnected_parts, self.txt_fromlast,
@@ -918,27 +1277,34 @@ class DigitizingControl(StraditizerControlBase):
                     self.btn_edit_occurences,
                     self.btn_show_parts_at_column_ends, self.btn_digitize]):
             return False
-        elif (self.straditizer.data_reader.exaggerated_reader is None and
+        elif (base_reader.exaggerated_reader is None and
               w in [self.txt_exag_percentage, self.txt_exag_absolute,
-                    self.btn_digitize_exag, self.btn_select_exaggerations]):
+                    self.btn_digitize_exag, self.btn_select_exaggerations,
+                    self.btn_pop_exag_target_color,
+                    self.btn_clear_exag_target_colors,
+                    self.btn_pick_exag_target_color]):
             return False
-        elif (w in [self.txt_exag_percentage, self.txt_exag_absolute,
-                    self.btn_digitize_exag] and
-              not self.straditizer.data_reader.exaggerated_reader.binary.any()
+        elif (w in [self.txt_exag_percentage, self.txt_exag_absolute] and
+              base_reader.exaggerated_reader is not None and
+              base_reader.exaggerated_reader
+              .exaggeration_merge_mode != 'threshold-legacy'):
+            return False
+        elif (w in [self.txt_exag_percentage, self.txt_exag_absolute] and
+              not base_reader.exaggerated_reader.binary.any()
               ):
             return False
-        elif (self.straditizer.data_reader.exaggerated_reader is not None and
+        elif (base_reader.exaggerated_reader is not None and
               w in [self.cb_exag_reader_type, self.cb_exag_extraction_mode,
                     self.btn_new_exaggeration,
                     self.txt_exag_factor]):
             return False
         elif (w is self.btn_reset_samples and
-              self.straditizer.data_reader._sample_locs is None):
+              base_reader._sample_locs is None):
             return False
         elif (w in [self.btn_find_samples, self.btn_edit_samples,
                     self.btn_edit_full_data, self.btn_load_samples,
                     self.btn_digitize_exag] and
-              self.straditizer.data_reader.full_df is None):
+              base_reader.full_df is None):
             return False
         elif (w is self.btn_show_small_parts and
               not self.txt_max_small_size.text()):
@@ -995,6 +1361,17 @@ class DigitizingControl(StraditizerControlBase):
         hbox_start = QHBoxLayout()
         hbox_start.addWidget(QLabel('Extraction mode:'))
         hbox_start.addWidget(self.cb_extraction_mode)
+        vbox_start.addLayout(hbox_start)
+        hbox_start = QHBoxLayout()
+        hbox_start.addWidget(QLabel('Segmentation mode:'))
+        hbox_start.addWidget(self.cb_segmentation_mode)
+        vbox_start.addLayout(hbox_start)
+        hbox_start = QHBoxLayout()
+        hbox_start.addWidget(QLabel('Target colors:'))
+        hbox_start.addWidget(self.txt_target_colors)
+        hbox_start.addWidget(self.btn_pick_target_color)
+        hbox_start.addWidget(self.btn_pop_target_color)
+        hbox_start.addWidget(self.btn_clear_target_colors)
         vbox_start.addLayout(hbox_start)
 
         w = QWidget()
@@ -1080,15 +1457,28 @@ class DigitizingControl(StraditizerControlBase):
         hbox.addWidget(QLabel('Extraction mode:'))
         hbox.addWidget(self.cb_exag_extraction_mode)
         vbox.addLayout(hbox)
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel('Segmentation mode:'))
+        hbox.addWidget(self.cb_exag_segmentation_mode)
+        vbox.addLayout(hbox)
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel('Target colors:'))
+        hbox.addWidget(self.txt_exag_target_colors)
+        hbox.addWidget(self.btn_pick_exag_target_color)
+        hbox.addWidget(self.btn_pop_exag_target_color)
+        hbox.addWidget(self.btn_clear_exag_target_colors)
+        vbox.addLayout(hbox)
         vbox.addWidget(self.btn_select_exaggerations)
         digitizer_layout = QGridLayout()
-        digitizer_layout.addWidget(QLabel('Percentage:'), 0, 0)
-        digitizer_layout.addWidget(self.txt_exag_percentage, 0, 1)
-        digitizer_layout.addWidget(QLabel('%'), 0, 2)
-        digitizer_layout.addWidget(QLabel('Absolute:'), 1, 0)
-        digitizer_layout.addWidget(self.txt_exag_absolute, 1, 1)
-        digitizer_layout.addWidget(QLabel('px'), 1, 2)
-        digitizer_layout.addWidget(self.btn_digitize_exag, 2, 0, 1, 3)
+        digitizer_layout.addWidget(QLabel('Merge mode:'), 0, 0)
+        digitizer_layout.addWidget(self.cb_exag_merge_mode, 0, 1, 1, 2)
+        digitizer_layout.addWidget(QLabel('Percentage:'), 1, 0)
+        digitizer_layout.addWidget(self.txt_exag_percentage, 1, 1)
+        digitizer_layout.addWidget(QLabel('%'), 1, 2)
+        digitizer_layout.addWidget(QLabel('Absolute:'), 2, 0)
+        digitizer_layout.addWidget(self.txt_exag_absolute, 2, 1)
+        digitizer_layout.addWidget(QLabel('px'), 2, 2)
+        digitizer_layout.addWidget(self.btn_digitize_exag, 3, 0, 1, 3)
         vbox.addLayout(digitizer_layout)
         w.setLayout(vbox)
         self.tree.setItemWidget(child2, 0, w)
@@ -1347,6 +1737,14 @@ class DigitizingControl(StraditizerControlBase):
         kws['reader_type'] = reader_type
         kws['extraction_mode'] = extraction_mode_labels[
             self.cb_extraction_mode.currentText()]
+        kws['segmentation_mode'] = segmentation_mode_labels[
+            self.cb_segmentation_mode.currentText()]
+        try:
+            kws['target_colors'] = binary.DataReader.normalize_target_colors(
+                self.txt_target_colors.text())
+        except ValueError as exc:
+            self._show_invalid_color_message(exc)
+            return
         if self.straditizer.data_reader is not None:
             for reader in self.straditizer.data_reader.iter_all_readers:
                 reader.remove_plots()
@@ -1363,10 +1761,21 @@ class DigitizingControl(StraditizerControlBase):
         else:
             loader = binary.readers[reader_type]
         factor = float(self.txt_exag_factor.text())
+        try:
+            target_colors = binary.DataReader.normalize_target_colors(
+                self.txt_exag_target_colors.text())
+        except ValueError as exc:
+            self._show_invalid_color_message(exc)
+            return
         self.straditizer.data_reader.create_exaggerations_reader(
             factor, loader,
             extraction_mode=extraction_mode_labels[
-                self.cb_exag_extraction_mode.currentText()])
+                self.cb_exag_extraction_mode.currentText()],
+            segmentation_mode=segmentation_mode_labels[
+                self.cb_exag_segmentation_mode.currentText()],
+            target_colors=target_colors,
+            exaggeration_merge_mode=merge_mode_labels[
+                self.cb_exag_merge_mode.currentText()])
         self.straditizer_widgets.refresh()
 
     def select_exaggerated_features(self):
@@ -1379,10 +1788,13 @@ class DigitizingControl(StraditizerControlBase):
         tb.data_obj = reader
         tb.start_selection(
             tb.labels, rgba=reader.image_array(), remove_on_apply=False)
-        tb.add_select_action.setChecked(True)
-        if not tb.wand_action.isChecked():
-            tb.wand_action.setChecked(True)
-            tb.toggle_selection()
+        candidate_mask = reader.suggest_exaggeration_mask()
+        if candidate_mask.any():
+            tb.prefill_selection_mask(candidate_mask)
+            tb.add_select_action.setChecked(True)
+            if not tb.wand_action.isChecked():
+                tb.wand_action.setChecked(True)
+                tb.toggle_selection()
         self.apply_button.setText('Select')
 
     def finish_exaggerated_features(self):
@@ -1817,6 +2229,87 @@ class DigitizingControl(StraditizerControlBase):
             pc.plot_full_df()
             pc.refresh()
 
+    def _plot_exaggeration_preview(self, reader, merged_df, mask_df, exag_df):
+        """Create an overlay preview for exaggeration merge confirmation."""
+        import matplotlib.pyplot as plt
+
+        fig = create_matplotlib_figure(
+            headless=should_use_headless_figure())
+        ax = fig.subplots()
+        extent = reader.extent
+        if extent is None:
+            image = np.asarray(reader.image)
+            extent = [0, image.shape[1], image.shape[0], 0]
+        ax.imshow(reader.image, extent=extent, zorder=0)
+        try:
+            fig.canvas.manager.set_window_title('Exaggeration merge preview')
+        except Exception:
+            pass
+
+        y0 = float(extent[3])
+        x0 = float(extent[0])
+        y = np.asarray(merged_df.index, dtype=float) + 0.5 + y0
+        bounds = np.asarray(reader.column_bounds, dtype=float)
+        factor = float(reader.exaggerated_reader.is_exaggerated or 1.0)
+        primary_df = reader.full_df
+        exag_vals = exag_df / factor
+
+        for i, col in enumerate(merged_df.columns):
+            start = x0 + bounds[i, 0]
+            primary = np.asarray(primary_df.loc[:, col], dtype=float)
+            merged = np.asarray(merged_df.loc[:, col], dtype=float)
+            exag = np.asarray(exag_vals.loc[:, col], dtype=float)
+            used = np.asarray(mask_df.loc[:, col], dtype=bool)
+            ax.plot(start + primary, y, color='black', alpha=0.45, lw=0.8)
+            ax.plot(start + exag, y, color='#ff8c00', alpha=0.45, lw=0.8)
+            merged_used = np.where(used, merged, np.nan)
+            ax.plot(start + merged_used, y, color='#00ff66', alpha=0.95, lw=1.5)
+
+        ax.set_title('Black: primary, Orange: exag/factor, Green: merged')
+        ax.set_xlim(extent[0], extent[1])
+        ax.set_ylim(extent[2], extent[3])
+        ax.grid(False)
+        fig.canvas.draw()
+        return fig
+
+    def _confirm_exaggeration_merge(self, reader, fraction, absolute, merge_mode):
+        """Show a mandatory preview and ask for explicit apply confirmation."""
+        import matplotlib.pyplot as plt
+
+        exag = reader.exaggerated_reader
+        if exag is None:
+            QMessageBox.information(
+                self.straditizer_widgets, 'No exaggeration reader',
+                'Create an exaggeration reader first.')
+            return False
+        if not exag.binary.any():
+            QMessageBox.information(
+                self.straditizer_widgets, 'No exaggeration pixels',
+                'No exaggeration pixels are selected yet. Use '
+                '"Select exaggerations" first.')
+            return False
+
+        merged_df, mask_df = reader.digitize_exaggerated(
+            fraction=fraction, absolute=absolute, inplace=False,
+            return_mask=True, merge_mode=merge_mode)
+        if not mask_df.values.any():
+            QMessageBox.information(
+                self.straditizer_widgets, 'No merge candidates',
+                'The current settings produced no merge candidates. '
+                'Adjust colors/mode or selection and try again.')
+            return False
+        exag_df = exag.digitize(inplace=False)
+        fig = self._plot_exaggeration_preview(reader, merged_df, mask_df, exag_df)
+        ret = QMessageBox.question(
+            self.straditizer_widgets, 'Apply exaggeration merge',
+            'Preview is ready. Apply this merge to the current full data?',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        try:
+            plt.close(fig.number)
+        except Exception:
+            pass
+        return ret == QMessageBox.Yes
+
     def digitize_exaggerations(self):
         """Digitize the data
 
@@ -1824,10 +2317,18 @@ class DigitizingControl(StraditizerControlBase):
         :meth:`straditize.binary.DataReader.digitize_exaggerated` method to
         digitize the exaggerated data of the current reader and merge it into
         the data obtained by the :meth:`digitize` method."""
-        reader = self.reader
+        reader = self._base_reader()
+        if reader is None:
+            return
         fraction = float(self.txt_exag_percentage.text().strip() or 0) / 100.
         absolute = int(self.txt_exag_absolute.text().strip() or 0)
-        reader.digitize_exaggerated(fraction=fraction, absolute=absolute)
+        merge_mode = merge_mode_labels[self.cb_exag_merge_mode.currentText()]
+        if not self._confirm_exaggeration_merge(
+                reader, fraction, absolute, merge_mode):
+            return
+        reader.digitize_exaggerated(
+            fraction=fraction, absolute=absolute, merge_mode=merge_mode)
+        self.straditizer_widgets.refresh()
 
     def remove_xaxes(self):
         """Remove x-axes in the plot

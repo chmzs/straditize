@@ -62,6 +62,39 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         self.assertEqual(encoding['reader_image']['complevel'], 4)
         self.assertEqual(encoding['mirror_colnames']['zlib'], True)
 
+    def test_save_and_load_preserves_segmentation_and_exaggeration_settings(self):
+        """Project serialization should keep reader segmentation settings."""
+        self.init_reader('basic_diagram_exaggerated.png')
+        self.reader.column_starts = np.array([0, 7, 14])
+        self.reader.segmentation_mode = 'guided'
+        self.reader.target_colors = ['#F0C8C8', '#B40000']
+        self.reader.exaggeration_merge_mode = 'selected-priority'
+        self.reader.create_exaggerations_reader(
+            2, extraction_mode='light-overlay-white',
+            segmentation_mode='guided', target_colors=['#F0C8C8'],
+            exaggeration_merge_mode='threshold-legacy')
+        self.straditizer_widgets.refresh()
+
+        for ending in ['.pkl', '.nc']:
+            fname = self.get_random_filename(suffix=ending)
+            self.straditizer_widgets.menu_actions.save_straditizer_as(fname)
+            self.straditizer_widgets.menu_actions.open_straditizer(fname)
+            self.assertEqual(self.reader.segmentation_mode, 'guided')
+            self.assertEqual(
+                self.reader.target_colors, ['#F0C8C8', '#B40000'])
+            self.assertEqual(
+                self.reader.exaggeration_merge_mode, 'selected-priority')
+            self.assertEqual(
+                self.reader.exaggerated_reader.segmentation_mode, 'guided')
+            self.assertEqual(
+                self.reader.exaggerated_reader.target_colors, ['#F0C8C8'])
+            self.assertEqual(
+                self.reader.exaggerated_reader.exaggeration_merge_mode,
+                'threshold-legacy')
+            self.assertGreaterEqual(self.reader.reader_schema_version, 2)
+            self.assertGreaterEqual(
+                self.reader.exaggerated_reader.reader_schema_version, 2)
+
     @unittest.skipIf(tesserocr is None, "requires tesserocr")
     def test_save_and_load_05_colnames(self):
         """Test the saving and loading of column names reader"""

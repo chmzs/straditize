@@ -7,10 +7,11 @@ from itertools import chain
 from unittest import mock
 from straditize import binary
 import os.path as osp
+from PIL import Image
 import _base_testing as bt
 import unittest
 from matplotlib.backend_bases import MouseButton
-from psyplot_gui.compat.qtcompat import QTest, Qt
+from psyplot_gui.compat.qtcompat import QTest, Qt, QMessageBox
 
 
 class RemoverTest(bt.StraditizeWidgetsTestCase):
@@ -562,11 +563,48 @@ class ChildReaderFrameworkTest(bt.StraditizeWidgetsTestCase):
 class ExaggeratedTest(bt.StraditizeWidgetsTestCase):
     """A test case for the exaggerated reader"""
 
+    def _create_light_overlay_exag_figure(self):
+        image = np.full((20, 20, 4), 255, dtype=np.uint8)
+        image[4:16, 3:7, :-1] = [180, 0, 0]
+        image[4:16, 9:13, :-1] = [255, 220, 220]
+        image[..., -1] = 255
+        fname = self.get_random_filename(suffix='.png')
+        Image.fromarray(image, mode='RGBA').save(fname)
+        return fname
+
+    def _create_same_hue_inside_main_exag_figure(self):
+        image = np.full((20, 20, 4), 255, dtype=np.uint8)
+        image[4:16, 3:8, :-1] = [180, 0, 0]
+        image[4:16, 8:13, :-1] = [240, 200, 200]
+        image[..., -1] = 255
+        fname = self.get_random_filename(suffix='.png')
+        Image.fromarray(image, mode='RGBA').save(fname)
+        return fname
+
     def test_init_reader_propagates_extraction_mode(self):
+        self.open_img('basic_diagram.png')
+        self.set_data_lims(None, None)
         self.digitizer.cb_extraction_mode.setCurrentText(
             'Light overlay on white background')
-        self.init_reader()
+        self.digitizer.init_reader()
         self.assertEqual(self.reader.extraction_mode, 'light-overlay-white')
+
+    def test_init_reader_propagates_segmentation_and_target_colors(self):
+        self.open_img('basic_diagram.png')
+        self.set_data_lims(None, None)
+        self.digitizer.cb_segmentation_mode.setCurrentText('Guided')
+        self.digitizer.txt_target_colors.setText('#F0C8C8, b40000')
+        with mock.patch.object(self.straditizer, 'init_reader') as init_reader, \
+                mock.patch.object(self.straditizer, 'show_full_image'), \
+                mock.patch.object(self.straditizer, 'draw_figure'), \
+                mock.patch.object(self.straditizer_widgets, 'refresh'):
+            self.digitizer.init_reader()
+        self.assertEqual(init_reader.call_count, 1)
+        self.assertEqual(
+            init_reader.call_args[1]['segmentation_mode'], 'guided')
+        self.assertEqual(
+            init_reader.call_args[1]['target_colors'],
+            ['#F0C8C8', '#B40000'])
 
     def test_init_exaggerated(self):
         self.init_reader('basic_diagram_exaggerated.png')
@@ -587,6 +625,24 @@ class ExaggeratedTest(bt.StraditizeWidgetsTestCase):
         self.assertEqual(
             self.reader.exaggerated_reader.extraction_mode,
             'light-overlay-white')
+
+    def test_init_exaggerated_reader_propagates_guided_settings(self):
+        self.init_reader('basic_diagram_exaggerated.png')
+        self.reader.column_starts = self.column_starts
+        self.straditizer_widgets.refresh()
+        self.digitizer.txt_exag_factor.setText('2')
+        self.digitizer.cb_exag_segmentation_mode.setCurrentText('Guided')
+        self.digitizer.txt_exag_target_colors.setText('#F0C8C8')
+        self.digitizer.cb_exag_merge_mode.setCurrentText(
+            'Threshold merge (legacy)')
+        QTest.mouseClick(self.digitizer.btn_new_exaggeration, Qt.LeftButton)
+        self.assertEqual(
+            self.reader.exaggerated_reader.segmentation_mode, 'guided')
+        self.assertEqual(
+            self.reader.exaggerated_reader.target_colors, ['#F0C8C8'])
+        self.assertEqual(
+            self.reader.exaggerated_reader.exaggeration_merge_mode,
+            'threshold-legacy')
 
     def test_select_exaggerations(self):
         """Test selecting the exaggerations"""
@@ -611,30 +667,169 @@ class ExaggeratedTest(bt.StraditizeWidgetsTestCase):
         self.assertBinaryImageEquals(
             self.reader.binary, self.get_fig_path('basic_diagram_binary.png'))
 
-    def test_digitize_exaggerations(self):
-        # get the original data
-        self.init_reader()
-        self.reader.column_starts = self.column_starts
-        orig = self.reader.digitize(inplace=False)
-        # start new from scratch
-        self.tearDown()
-        self.setUp()
+    def test_select_exaggerations_prefills_light_overlay_candidates(self):
+        fname = self._create_light_overlay_exag_figure()
+        self.digitizer.cb_extraction_mode.setCurrentText('Standard')
+        self.init_reader(fname, xlim=np.array([0., 20.]), ylim=np.array([0., 20.]))
+        main_reader = self.reader
+        main_reader.column_starts = np.array([0])
+        self.straditizer_widgets.refresh()
+        self.digitizer.txt_exag_factor.setText('2')
+        self.digitizer.cb_exag_extraction_mode.setCurrentText(
+            'Light overlay on white background')
+        QTest.mouseClick(self.digitizer.btn_new_exaggeration, Qt.LeftButton)
+        QTest.mouseClick(self.digitizer.btn_select_exaggerations, Qt.LeftButton)
 
-        # use the exaggerations
+        expected = np.zeros(main_reader.binary.shape, dtype=bool)
+        expected[4:16, 9:13] = True
+
+        self.assertArrayEquals(main_reader.selected_part, expected)
+
+        QTest.mouseClick(self.straditizer_widgets.apply_button, Qt.LeftButton)
+        self.assertArrayEquals(
+            main_reader.exaggerated_reader.binary.astype(bool), expected)
+        self.assertFalse(main_reader.binary[expected].any())
+
+    def test_select_exaggerations_prefills_same_hue_candidates_inside_main(self):
+        fname = self._create_same_hue_inside_main_exag_figure()
+        self.digitizer.cb_extraction_mode.setCurrentText('Standard')
+        self.init_reader(fname, xlim=np.array([0., 20.]), ylim=np.array([0., 20.]))
+        main_reader = self.reader
+        main_reader.column_starts = np.array([0])
+        self.straditizer_widgets.refresh()
+        self.digitizer.txt_exag_factor.setText('2')
+        self.digitizer.cb_exag_extraction_mode.setCurrentText(
+            'Light overlay on white background')
+        QTest.mouseClick(self.digitizer.btn_new_exaggeration, Qt.LeftButton)
+        QTest.mouseClick(self.digitizer.btn_select_exaggerations, Qt.LeftButton)
+
+        expected = np.zeros(main_reader.binary.shape, dtype=bool)
+        expected[4:16, 8:13] = True
+        primary = np.zeros(main_reader.binary.shape, dtype=bool)
+        primary[4:16, 3:8] = True
+
+        self.assertArrayEquals(main_reader.selected_part, expected)
+
+        QTest.mouseClick(self.straditizer_widgets.apply_button, Qt.LeftButton)
+        self.assertArrayEquals(
+            main_reader.exaggerated_reader.binary.astype(bool), expected)
+        self.assertFalse(main_reader.binary[expected].any())
+        self.assertTrue(main_reader.binary[primary].all())
+
+    def test_select_exaggerations_guided_target_colors_focus_candidates(self):
+        fname = self.get_random_filename(suffix='.png')
+        image = np.full((20, 20, 4), 255, dtype=np.uint8)
+        image[4:16, 3:8, :-1] = [180, 0, 0]
+        image[4:16, 8:13, :-1] = [240, 200, 200]
+        image[4:16, 13:17, :-1] = [200, 220, 255]
+        image[..., -1] = 255
+        Image.fromarray(image, mode='RGBA').save(fname)
+
+        self.digitizer.cb_extraction_mode.setCurrentText('Standard')
+        self.init_reader(fname, xlim=np.array([0., 20.]), ylim=np.array([0., 20.]))
+        main_reader = self.reader
+        main_reader.column_starts = np.array([0])
+        self.straditizer_widgets.refresh()
+        self.digitizer.txt_exag_factor.setText('2')
+        self.digitizer.cb_exag_extraction_mode.setCurrentText(
+            'Light overlay on white background')
+        self.digitizer.cb_exag_segmentation_mode.setCurrentText('Guided')
+        self.digitizer.txt_exag_target_colors.setText('#F0C8C8')
+        QTest.mouseClick(self.digitizer.btn_new_exaggeration, Qt.LeftButton)
+        QTest.mouseClick(self.digitizer.btn_select_exaggerations, Qt.LeftButton)
+
+        expected = np.zeros(main_reader.binary.shape, dtype=bool)
+        expected[4:16, 8:13] = True
+        nuisance = np.zeros(main_reader.binary.shape, dtype=bool)
+        nuisance[4:16, 13:17] = True
+
+        self.assertArrayEquals(main_reader.selected_part, expected)
+        self.assertFalse(main_reader.selected_part[nuisance].any())
+
+    def test_pick_target_color_appends_hex_for_reader(self):
+        fname = self._create_same_hue_inside_main_exag_figure()
+        self.init_reader(fname, xlim=np.array([0., 20.]), ylim=np.array([0., 20.]))
+        reader = self.reader
+        self.digitizer.txt_target_colors.setText('#112233')
+        QTest.mouseClick(self.digitizer.btn_pick_target_color, Qt.LeftButton)
+        x, y = reader.ax.transData.transform([[5, 5]])[0]
+        reader.ax.figure.canvas.button_press_event(x, y, 1)
+        self.assertEqual(
+            self.digitizer.txt_target_colors.text(),
+            '#112233, #B40000')
+
+    def test_target_color_text_helpers_allow_append_pop_and_clear(self):
+        self.assertEqual(
+            self.digitizer._append_color_text('#E5E5E5, #EBE2E3', '#992F31'),
+            '#E5E5E5, #EBE2E3, #992F31')
+        self.assertEqual(
+            self.digitizer._pop_color_text('#E5E5E5, #EBE2E3, #992F31'),
+            '#E5E5E5, #EBE2E3')
+        self.digitizer.txt_target_colors.setText('#E5E5E5, #EBE2E3')
+        self.digitizer.clear_target_colors(False)
+        self.assertEqual(self.digitizer.txt_target_colors.text(), '')
+
+    def test_merge_mode_switch_requires_confirmation(self):
         self.test_select_exaggerations()
-        self.digitizer.txt_exag_absolute.setText('3')
+        QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
+        self.digitizer.cb_exag_merge_mode.setCurrentText(
+            'Selected region priority')
+        with mock.patch(
+                'straditize.widgets.data.QMessageBox.question',
+                return_value=QMessageBox.No):
+            self.digitizer.cb_exag_merge_mode.setCurrentText(
+                'Threshold merge (legacy)')
+        self.assertEqual(self.digitizer.cb_exag_merge_mode.currentText(),
+                         'Selected region priority')
+
+    def test_digitize_exaggerations(self):
+        self.test_select_exaggerations()
+        self.digitizer.cb_exag_merge_mode.setCurrentText(
+            'Selected region priority')
         self.assertFalse(self.digitizer.btn_digitize_exag.isEnabled())
         QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
         self.assertTrue(self.digitizer.btn_digitize_exag.isEnabled())
-        # digitize the exaggerations
+        base = self.reader.full_df.copy(True)
         df, mask = self.reader.digitize_exaggerated(
-            absolute=3, return_mask=True, inplace=False)
-        self.assertFrameEqual(df, orig)
-        self.assertArrayEquals(
-            mask.values,
-            orig.values.astype(bool) & (orig.values < 3))
-        QTest.mouseClick(self.digitizer.btn_digitize_exag, Qt.LeftButton)
-        self.assertFrameEqual(self.reader.full_df, orig)
+            return_mask=True, inplace=False)
+        self.assertTrue(mask.values.any())
+        self.assertFalse(np.array_equal(df.values, base.values))
+        with mock.patch.object(
+                self.digitizer, '_confirm_exaggeration_merge',
+                return_value=True):
+            QTest.mouseClick(self.digitizer.btn_digitize_exag, Qt.LeftButton)
+        self.assertFrameEqual(self.reader.full_df, df)
+
+    def test_digitize_exaggerations_requires_preview_confirmation(self):
+        self.test_select_exaggerations()
+        QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
+        before = self.reader.full_df.copy(True)
+        with mock.patch.object(
+                self.digitizer, '_confirm_exaggeration_merge',
+                return_value=False):
+            QTest.mouseClick(self.digitizer.btn_digitize_exag, Qt.LeftButton)
+        self.assertFrameEqual(self.reader.full_df, before)
+
+    def test_digitize_exaggerations_empty_selection_shows_recovery_message(self):
+        self.test_init_exaggerated()
+        QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
+        self.reader.exaggerated_reader.binary[:] = 0
+        self.straditizer_widgets.refresh()
+        self.assertTrue(self.digitizer.btn_digitize_exag.isEnabled())
+        with mock.patch(
+                'straditize.widgets.data.QMessageBox.information') as info:
+            QTest.mouseClick(self.digitizer.btn_digitize_exag, Qt.LeftButton)
+        self.assertTrue(info.called)
+
+    def test_digitize_exaggerations_enablement_uses_base_reader(self):
+        self.test_select_exaggerations()
+        QTest.mouseClick(self.digitizer.btn_digitize, Qt.LeftButton)
+        exag_index = next(
+            i for i in range(self.digitizer.cb_readers.count())
+            if self.digitizer.cb_readers.itemText(i).startswith('exag.'))
+        self.digitizer.cb_readers.setCurrentIndex(exag_index)
+        self.straditizer_widgets.refresh()
+        self.assertTrue(self.digitizer.btn_digitize_exag.isEnabled())
 
 
 class BarReaderTest(bt.StraditizeWidgetsTestCase):

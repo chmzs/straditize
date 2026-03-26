@@ -11,6 +11,7 @@ from unittest import mock
 import numpy as np
 from straditize import binary
 import pandas as pd
+from pandas.testing import assert_frame_equal
 import create_test_sample as ct
 import matplotlib as mpl
 from PIL import Image
@@ -47,6 +48,20 @@ class AlmostArrayEqualMixin(object):
         try:
             np.testing.assert_allclose(actual, desired, rtol=rtol, atol=atol,
                                        err_msg=msg or '', **kwargs)
+        except (Exception, AssertionError) as e:
+            self.fail(e if six.PY3 else e.message)
+
+    def assertFrameEqual(self, actual, desired, *args, **kwargs):
+        """Assert that two data frames are equal."""
+        try:
+            assert_frame_equal(actual, desired, *args, **kwargs)
+        except (Exception, AssertionError) as e:
+            self.fail(e if six.PY3 else e.message)
+
+    def assertArrayEquals(self, actual, desired, *args, **kwargs):
+        """Assert that two arrays are equal."""
+        try:
+            np.testing.assert_array_equal(actual, desired, *args, **kwargs)
         except (Exception, AssertionError) as e:
             self.fail(e if six.PY3 else e.message)
 
@@ -146,6 +161,225 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
                                    extraction_mode='light-overlay-white')
 
         self.assertEqual(reader.extraction_mode, 'light-overlay-white')
+
+    def test_reader_accepts_guided_segmentation_and_target_colors(self):
+        """Readers should normalize guided segmentation configuration."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [240, 200, 200, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+
+        reader = binary.DataReader(
+            image, plot=False, segmentation_mode='guided',
+            target_colors=['f0c8c8', '#B40000'],
+            exaggeration_merge_mode='threshold-legacy')
+
+        self.assertEqual(reader.segmentation_mode, 'guided')
+        self.assertEqual(reader.target_colors, ['#F0C8C8', '#B40000'])
+        self.assertEqual(reader.exaggeration_merge_mode, 'threshold-legacy')
+
+    def test_guided_segmentation_preserves_requested_target_color_family(self):
+        """Guided segmentation should retain requested pale target colors."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [240, 200, 200, 255],
+            [200, 220, 255, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+
+        mask = binary.DataReader.to_binary_pil(
+            image, extraction_mode='standard', segmentation_mode='guided',
+            target_colors=['#F0C8C8'])
+
+        self.assertEqual(mask.tolist(), [[0, 1, 0]])
+
+    def test_light_overlay_mode_suggests_and_adds_exaggeration_pixels(self):
+        """Light-overlay mode should seed exagg pixels missing from standard."""
+        image = np.full((12, 14, 4), 255, dtype=np.uint8)
+        image[2:10, 2:5, :-1] = [180, 0, 0]
+        image[2:10, 6:10, :-1] = [255, 220, 220]
+        image[..., -1] = 255
+        image = Image.fromarray(image, mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False)
+        exag = reader.create_exaggerations_reader(
+            2, extraction_mode='light-overlay-white')
+
+        expected = np.zeros(reader.binary.shape, dtype=bool)
+        expected[2:10, 6:10] = True
+
+        np.testing.assert_equal(reader.suggest_exaggeration_mask(), expected)
+
+        reader.mark_as_exaggerations(expected)
+
+        np.testing.assert_equal(exag.binary.astype(bool), expected)
+        self.assertTrue(reader.binary[2:10, 2:5].all())
+        self.assertFalse(reader.binary[expected].any())
+
+    def test_light_overlay_mode_suggests_same_hue_pixels_inside_main_binary(self):
+        """Light-overlay mode should split pale same-hue foreground in-place."""
+        image = np.full((12, 14, 4), 255, dtype=np.uint8)
+        image[2:10, 2:6, :-1] = [180, 0, 0]
+        image[2:10, 6:10, :-1] = [240, 200, 200]
+        image[..., -1] = 255
+        image = Image.fromarray(image, mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False)
+        exag = reader.create_exaggerations_reader(
+            2, extraction_mode='light-overlay-white')
+
+        expected = np.zeros(reader.binary.shape, dtype=bool)
+        expected[2:10, 6:10] = True
+        primary = np.zeros(reader.binary.shape, dtype=bool)
+        primary[2:10, 2:6] = True
+
+        np.testing.assert_equal(reader.binary[expected], 1)
+        np.testing.assert_equal(reader.suggest_exaggeration_mask(), expected)
+
+        reader.mark_as_exaggerations(expected)
+
+        np.testing.assert_equal(exag.binary.astype(bool), expected)
+        self.assertTrue(reader.binary[primary].all())
+        self.assertFalse(reader.binary[expected].any())
+
+    def test_light_overlay_mode_keeps_uniform_dark_foreground_unselected(self):
+        """Uniform dark foreground should not produce false exagg candidates."""
+        image = np.full((12, 14, 4), 255, dtype=np.uint8)
+        image[2:10, 2:10, :-1] = [180, 0, 0]
+        image[..., -1] = 255
+        image = Image.fromarray(image, mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False)
+        reader.create_exaggerations_reader(2, extraction_mode='light-overlay-white')
+
+        self.assertFalse(reader.suggest_exaggeration_mask().any())
+
+    def test_guided_target_colors_focus_same_hue_exaggeration_candidates(self):
+        """Guided target colors should focus same-hue exaggeration candidates."""
+        image = np.full((12, 14, 4), 255, dtype=np.uint8)
+        image[2:10, 1:5, :-1] = [180, 0, 0]
+        image[2:10, 5:9, :-1] = [240, 200, 200]
+        image[2:10, 9:12, :-1] = [200, 220, 255]
+        image[..., -1] = 255
+        image = Image.fromarray(image, mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False)
+        exag = reader.create_exaggerations_reader(
+            2, extraction_mode='light-overlay-white',
+            segmentation_mode='guided', target_colors=['#F0C8C8'])
+
+        expected = np.zeros(reader.binary.shape, dtype=bool)
+        expected[2:10, 5:9] = True
+        nuisance = np.zeros(reader.binary.shape, dtype=bool)
+        nuisance[2:10, 9:12] = True
+
+        self.assertEqual(exag.segmentation_mode, 'guided')
+        np.testing.assert_equal(reader.suggest_exaggeration_mask(), expected)
+        self.assertFalse(reader.suggest_exaggeration_mask()[nuisance].any())
+
+    def test_digitize_exaggerated_selected_priority_overrides_selected_rows(self):
+        """Selected-priority merge should overwrite rows selected as exagg."""
+        image = np.full((3, 12, 4), 255, dtype=np.uint8)
+        image[..., -1] = 255
+        image = Image.fromarray(image, mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False)
+        reader.columns = [0]
+        reader._column_starts = np.array([0])
+        reader._column_ends = np.array([12])
+        reader.full_df = pd.DataFrame({0: [10., 5., 1.]})
+        exag = reader.create_exaggerations_reader(
+            2, exaggeration_merge_mode='selected-priority')
+        exag.binary = np.zeros_like(reader.binary)
+        exag.binary[0:2, :6] = 1
+
+        values = pd.DataFrame({0: [4., 8., 0.]})
+        exag.digitize = types.MethodType(
+            lambda self, inplace=False: values.copy(True), exag)
+
+        merged, mask = reader.digitize_exaggerated(
+            inplace=False, return_mask=True)
+
+        self.assertFrameEqual(
+            merged, pd.DataFrame({0: [2., 4., 1.]}),
+            check_dtype=False)
+        self.assertArrayEquals(
+            mask.values, np.array([[True], [True], [False]]))
+
+    def test_digitize_exaggerated_threshold_legacy_still_uses_thresholds(self):
+        """Legacy exaggeration merge should still honor low-value thresholds."""
+        image = np.full((3, 12, 4), 255, dtype=np.uint8)
+        image[..., -1] = 255
+        image = Image.fromarray(image, mode='RGBA')
+
+        reader = binary.DataReader(image, plot=False)
+        reader.columns = [0]
+        reader._column_starts = np.array([0])
+        reader._column_ends = np.array([12])
+        reader.full_df = pd.DataFrame({0: [10., 2., 1.]})
+        exag = reader.create_exaggerations_reader(
+            2, exaggeration_merge_mode='threshold-legacy')
+        exag.binary = np.zeros_like(reader.binary)
+        exag.binary[:, :6] = 1
+
+        values = pd.DataFrame({0: [4., 8., 2.]})
+        exag.digitize = types.MethodType(
+            lambda self, inplace=False: values.copy(True), exag)
+
+        merged, mask = reader.digitize_exaggerated(
+            absolute=3, inplace=False, return_mask=True)
+
+        self.assertFrameEqual(
+            merged, pd.DataFrame({0: [10., 4., 1.]}),
+            check_dtype=False)
+        self.assertArrayEquals(
+            mask.values, np.array([[False], [True], [True]]))
+
+    def test_line_reader_digitize_uses_centerline_trace(self):
+        """Line reader should trace centerline, not rightmost area boundary."""
+        binary_image = np.zeros((10, 12), dtype=np.int8)
+        binary_image[:, 2:7] = 1
+
+        area = binary.DataReader(binary_image, plot=False)
+        area.columns = [0]
+        area._column_starts = np.array([0])
+        area._column_ends = np.array([12])
+        area.digitize()
+
+        line = binary.LineDataReader(binary_image, plot=False)
+        line.columns = [0]
+        line._column_starts = np.array([0])
+        line._column_ends = np.array([12])
+        line.digitize()
+
+        self.assertTrue(np.all(line.full_df.values < area.full_df.values))
+        self.assertAlmostArrayEqual(
+            line.full_df.values.flatten(),
+            np.full(10, 5.0), atol=0.5)
+
+    def test_reader_schema_version_roundtrip(self):
+        """Reader schema version should be serialized and restored."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [180, 0, 0, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+        reader = binary.DataReader(image, plot=False)
+        ds = reader.to_dataset()
+        self.assertIn('reader_schema_version', ds)
+        loaded = binary.DataReader.from_dataset(ds)
+        self.assertEqual(
+            loaded.reader_schema_version, reader.reader_schema_version)
+
+    def test_reader_schema_version_defaults_to_legacy_without_field(self):
+        """Older saved datasets without schema version default to 1."""
+        image = Image.fromarray(np.array([[
+            [255, 255, 255, 255],
+            [180, 0, 0, 255],
+        ]], dtype=np.uint8), mode='RGBA')
+        reader = binary.DataReader(image, plot=False)
+        ds = reader.to_dataset()
+        ds = ds.drop_vars('reader_schema_version')
+        loaded = binary.DataReader.from_dataset(ds)
+        self.assertEqual(loaded.reader_schema_version, 1)
 
     def test_obstacle_01_alternation_min(self):
         """Test whether the alternation is identified correctly in a minimum"""

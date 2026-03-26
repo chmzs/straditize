@@ -29,6 +29,7 @@ from collections import defaultdict
 import matplotlib.colors as mcol
 from straditize.common import docstrings, nearest_index_position
 from straditize.label_selection import LabelSelection
+from straditize import segmentation
 import xarray as xr
 from psyplot.data import safe_list
 
@@ -125,16 +126,24 @@ class DataReader(LabelSelection):
     #: Extraction mode used to separate signal from background.
     extraction_mode = 'standard'
 
+    #: Segmentation mode used for optional color-guided extraction.
+    segmentation_mode = 'auto'
+
+    #: Optional target colors used by guided segmentation.
+    target_colors = []
+
+    #: Merge mode for exaggerated data.
+    exaggeration_merge_mode = 'selected-priority'
+
     #: Supported foreground extraction modes for future UI wiring.
-    EXTRACTION_MODES = {
-        'standard': 'standard',
-        'light-overlay-white': 'light-overlay-white',
-        'light overlay on white background': 'light-overlay-white',
-        'dark-ink-light': 'dark-ink-light',
-        'dark ink on light background': 'dark-ink-light',
-        'light-ink-dark': 'light-ink-dark',
-        'light ink on dark background': 'light-ink-dark',
-    }
+    EXTRACTION_MODES = segmentation.EXTRACTION_MODES
+
+    SEGMENTATION_MODES = segmentation.SEGMENTATION_MODES
+
+    EXAGGERATION_MERGE_MODES = segmentation.EXAGGERATION_MERGE_MODES
+
+    #: Schema version for reader-level serialized settings.
+    reader_schema_version = segmentation.READER_SCHEMA_VERSION
 
     #: magnified :attr:`plot_im`
     magni_plot_im = None
@@ -487,7 +496,10 @@ class DataReader(LabelSelection):
     def __init__(self, image, ax=None, extent=None,
                  plot=True, children=[], parent=None, magni=None,
                  plot_background=False, binary=None,
-                 extraction_mode='standard'):
+                 extraction_mode='standard', segmentation_mode='auto',
+                 target_colors=None,
+                 exaggeration_merge_mode='selected-priority',
+                 reader_schema_version=None):
         """
         Parameters
         ----------
@@ -515,6 +527,13 @@ class DataReader(LabelSelection):
         """
         from PIL import Image
         self.extraction_mode = self.normalize_extraction_mode(extraction_mode)
+        self.segmentation_mode = self.normalize_segmentation_mode(
+            segmentation_mode)
+        self.target_colors = self.normalize_target_colors(target_colors)
+        self.exaggeration_merge_mode = self.normalize_exaggeration_merge_mode(
+            exaggeration_merge_mode)
+        self.reader_schema_version = int(
+            reader_schema_version or segmentation.READER_SCHEMA_VERSION)
         if binary is not None:
             self.binary = binary
         if np.ndim(image) == 2:
@@ -527,7 +546,9 @@ class DataReader(LabelSelection):
             image = rgba
         elif binary is None:
                 self.binary = self.to_binary_pil(
-                    image, extraction_mode=self.extraction_mode)
+                    image, extraction_mode=self.extraction_mode,
+                    segmentation_mode=self.segmentation_mode,
+                    target_colors=self.target_colors)
 
         try:
             mode = image.mode
@@ -584,7 +605,9 @@ class DataReader(LabelSelection):
             if not binary:
                 self.image = image
             self.binary = self.to_binary_pil(
-                image, extraction_mode=self.extraction_mode)
+                image, extraction_mode=self.extraction_mode,
+                segmentation_mode=self.segmentation_mode,
+                target_colors=self.target_colors)
             self.reset_labels()
             if self.plot_im is not None:
                 self.update_image(None, None)
@@ -784,6 +807,11 @@ class DataReader(LabelSelection):
              'shifted': self.shifted if is_parent else None,
              '_columns': self._columns,
              'is_exaggerated': self.is_exaggerated,
+             'extraction_mode': self.extraction_mode,
+             'segmentation_mode': self.segmentation_mode,
+             'target_colors': self.target_colors,
+             'exaggeration_merge_mode': self.exaggeration_merge_mode,
+             'reader_schema_version': self.reader_schema_version,
              '_xaxis_px_orig': self._xaxis_px_orig,
              'xaxis_data': self.xaxis_data,
              '_occurences': self._occurences if is_parent else set(),
@@ -810,6 +838,21 @@ class DataReader(LabelSelection):
         'reader_mod': {
             'dims': 'reader',
             'long_name': 'The module of the reader class'},
+        'extraction_mode': {
+            'dims': 'reader',
+            'long_name': 'Foreground extraction mode for the reader'},
+        'segmentation_mode': {
+            'dims': 'reader',
+            'long_name': 'Segmentation mode for the reader'},
+        'target_colors': {
+            'dims': 'reader',
+            'long_name': 'Comma-separated target colors for guided mode'},
+        'exaggeration_merge_mode': {
+            'dims': 'reader',
+            'long_name': 'Merge mode for exaggerated digitization'},
+        'reader_schema_version': {
+            'dims': 'reader',
+            'long_name': 'Reader settings schema version'},
         'binary': {
             'dims': ('reader', 'ydata', 'xdata'),
             'long_name': 'Binary images for data readers'},
@@ -891,10 +934,12 @@ class DataReader(LabelSelection):
                 nreaders = len(list(self.iter_all_readers))
                 shape = list(np.shape(data))
                 shape.insert(dims.index('reader'), nreaders)
-                if final_vname in ['reader_mod', 'reader_cls']:
+                data_arr = np.asarray(data)
+                if (final_vname in ['reader_mod', 'reader_cls'] or
+                        data_arr.dtype.kind in 'OUS'):
                     dtype = object
                 else:
-                    dtype = np.asarray(data).dtype
+                    dtype = data_arr.dtype
                 v = xr.Variable(
                     dims, np.zeros(shape, dtype=dtype),
                     attrs=attrs)
@@ -931,6 +976,14 @@ class DataReader(LabelSelection):
         self.create_variable(ds, 'is_exaggerated', self.is_exaggerated)
         self.create_variable(ds, 'reader_cls', self.__class__.__name__)
         self.create_variable(ds, 'reader_mod', self.__class__.__module__)
+        self.create_variable(ds, 'extraction_mode', self.extraction_mode)
+        self.create_variable(ds, 'segmentation_mode', self.segmentation_mode)
+        self.create_variable(ds, 'target_colors',
+                             ','.join(self.target_colors))
+        self.create_variable(ds, 'exaggeration_merge_mode',
+                             self.exaggeration_merge_mode)
+        self.create_variable(ds, 'reader_schema_version',
+                             self.reader_schema_version)
         ireader = list(self.iter_all_readers).index(self)
 
         if self._xaxis_px_orig is not None:
@@ -1011,6 +1064,27 @@ class DataReader(LabelSelection):
         reader = cls(ds['reader_image'].values, *args,
                      binary=ds['binary'].values, **kwargs)
         reader.is_exaggerated = ds['is_exaggerated'].values
+        if 'extraction_mode' in ds:
+            reader.extraction_mode = cls.normalize_extraction_mode(
+                ds['extraction_mode'].values.item())
+        if 'segmentation_mode' in ds:
+            reader.segmentation_mode = cls.normalize_segmentation_mode(
+                ds['segmentation_mode'].values.item())
+        if 'target_colors' in ds:
+            reader.target_colors = cls.normalize_target_colors(
+                ds['target_colors'].values.item())
+        if 'exaggeration_merge_mode' in ds:
+            reader.exaggeration_merge_mode = (
+                cls.normalize_exaggeration_merge_mode(
+                    ds['exaggeration_merge_mode'].values.item()))
+        else:
+            # Older saved projects used the legacy thresholded merge logic.
+            reader.exaggeration_merge_mode = 'threshold-legacy'
+        if 'reader_schema_version' in ds:
+            reader.reader_schema_version = int(
+                ds['reader_schema_version'].values.item())
+        else:
+            reader.reader_schema_version = 1
 
         is_parent = reader.parent is reader
 
@@ -1147,15 +1221,18 @@ class DataReader(LabelSelection):
     @property
     def non_exaggerated_reader(self):
         """The reader that represents the exaggerations"""
-        cols = set(self.columns)
+        cols = set(self.columns or [])
         return next(
             (child for child in self.iter_all_readers
              if not child.is_exaggerated and
-             set(child.columns or [None]) <= cols),
+             cols <= set(child.columns or [])),
             None)
 
     def create_exaggerations_reader(self, factor, cls=None,
-                                    extraction_mode=None):
+                                    extraction_mode=None,
+                                    segmentation_mode=None,
+                                    target_colors=None,
+                                    exaggeration_merge_mode=None):
         """Create a new exaggerations reader for this reader
 
         Parameters
@@ -1167,6 +1244,12 @@ class DataReader(LabelSelection):
         extraction_mode: str
             Foreground extraction mode for the exaggeration reader. Defaults
             to the mode of the current reader.
+        segmentation_mode: str
+            Optional segmentation mode for the exaggeration reader.
+        target_colors: list of str
+            Optional target colors for guided segmentation.
+        exaggeration_merge_mode: str
+            Optional merge mode for exaggerated digitization.
 
         Returns
         -------
@@ -1177,9 +1260,19 @@ class DataReader(LabelSelection):
             cls = self.__class__
         if extraction_mode is None:
             extraction_mode = self.extraction_mode
+        if segmentation_mode is None:
+            segmentation_mode = self.segmentation_mode
+        if target_colors is None:
+            target_colors = list(self.target_colors)
+        if exaggeration_merge_mode is None:
+            exaggeration_merge_mode = self.exaggeration_merge_mode
         new_binary = np.zeros_like(self.binary)
         ret = cls(new_binary, ax=self.ax, extent=self.extent, plot=True,
-                  parent=self, extraction_mode=extraction_mode)
+                  parent=self, extraction_mode=extraction_mode,
+                  segmentation_mode=segmentation_mode,
+                  target_colors=target_colors,
+                  exaggeration_merge_mode=exaggeration_merge_mode,
+                  reader_schema_version=self.reader_schema_version)
         ret.is_exaggerated = factor
         self.children.append(ret)
         ret.columns = self.columns
@@ -1194,6 +1287,58 @@ class DataReader(LabelSelection):
         ret.hline_locs = self.hline_locs
         ret.vline_locs = self.vline_locs
         return ret
+
+    @staticmethod
+    def _circular_hue_distance(hue, reference):
+        """Return the circular distance between hue values."""
+        return segmentation.circular_hue_distance(hue, reference)
+
+    @classmethod
+    def _dominant_overlay_hue(cls, hue, sat, mask):
+        """Return dominant hue and confidence for the given foreground mask."""
+        return segmentation.dominant_overlay_hue(hue, sat, mask)
+
+    @classmethod
+    def _suggest_same_hue_light_overlay_mask(
+            cls, rgb, base_mask, overlay_mask, bounds, focus_mask=None):
+        """Suggest pale same-hue overlay pixels within the current foreground."""
+        return segmentation.split_primary_exagg(
+            rgb, base_mask, overlay_mask, bounds, focus_mask=focus_mask)
+
+    def suggest_exaggeration_mask(self):
+        """Return an automatic exaggeration candidate mask.
+
+        The current implementation consumes the extraction mode configured on
+        the exaggeration reader. ``light-overlay-white`` proposes pale overlay
+        pixels that are either absent from the main reader binary or belong to
+        a lighter same-hue subgroup within the current foreground.
+        """
+        reader = self.non_exaggerated_reader if self.is_exaggerated else self
+        exaggerated = reader.exaggerated_reader
+        if exaggerated is None:
+            return np.zeros_like(reader.binary, dtype=bool)
+        mode = reader.normalize_extraction_mode(exaggerated.extraction_mode)
+        if mode != 'light-overlay-white':
+            return np.zeros_like(reader.binary, dtype=bool)
+        overlay_mask = reader.to_binary_pil(
+            reader.image, extraction_mode=mode,
+            segmentation_mode=exaggerated.segmentation_mode,
+            target_colors=exaggerated.target_colors).astype(bool)
+        base_mask = reader.binary.astype(bool)
+        try:
+            bounds = np.asarray(reader.column_bounds, dtype=int)
+            if bounds.ndim != 2 or not len(bounds):
+                raise ValueError
+        except Exception:
+            bounds = np.array([[0, base_mask.shape[1]]], dtype=int)
+        rgb = np.asarray(reader.image, dtype=float)[..., :3] / 255.0
+        focus_mask = None
+        if (exaggerated.segmentation_mode == 'guided' and
+                exaggerated.target_colors):
+            focus_mask = reader._guided_target_hue_family_mask(
+                rgb, exaggerated.target_colors)
+        return self._suggest_same_hue_light_overlay_mask(
+            rgb, base_mask, overlay_mask, bounds, focus_mask=focus_mask)
 
     def mark_as_exaggerations(self, mask):
         """Mask the given array as exaggerated
@@ -1214,11 +1359,21 @@ class DataReader(LabelSelection):
                         self.columns, ))
             return exaggerated.mark_as_exaggerations(mask)
         non_exaggerated = self.non_exaggerated_reader
-        self.binary[mask] = non_exaggerated.binary[mask]
-        non_exaggerated.binary[mask] = 0
+        mask = np.asarray(mask, dtype=bool)
+        moved_mask = mask & non_exaggerated.binary.astype(bool)
+        added_mask = mask & ~moved_mask
+        self.binary[moved_mask] = non_exaggerated.binary[moved_mask]
+        self.binary[added_mask] = 1
+        non_exaggerated.binary[moved_mask] = 0
         # update the plots
-        non_exaggerated.update_image(non_exaggerated.labels, mask)
-        self.update_image(self.labels, ~mask)
+        if non_exaggerated.plot_im is not None:
+            non_exaggerated.update_image(non_exaggerated.labels, moved_mask)
+        else:
+            non_exaggerated.reset_labels()
+        if self.plot_im is not None:
+            self.update_image(self.labels, ~mask)
+        else:
+            self.reset_labels()
         # update the colored images
         non_exag_image = np.asarray(non_exaggerated.image)
         exag_image = np.asarray(self.image)
@@ -1325,43 +1480,56 @@ class DataReader(LabelSelection):
     @classmethod
     def normalize_extraction_mode(cls, extraction_mode):
         """Normalize an extraction-mode string to the internal identifier."""
-        if extraction_mode is None:
-            extraction_mode = 'standard'
-        key = six.text_type(extraction_mode).strip().lower()
-        try:
-            return cls.EXTRACTION_MODES[key]
-        except KeyError:
-            raise ValueError('Unknown extraction mode: %s' % extraction_mode)
+        return segmentation.normalize_extraction_mode(extraction_mode)
+
+    @classmethod
+    def normalize_segmentation_mode(cls, segmentation_mode):
+        """Normalize a segmentation-mode string to the internal identifier."""
+        return segmentation.normalize_segmentation_mode(segmentation_mode)
+
+    @classmethod
+    def normalize_exaggeration_merge_mode(cls, merge_mode):
+        """Normalize an exaggeration merge mode to the internal identifier."""
+        return segmentation.normalize_exaggeration_merge_mode(merge_mode)
+
+    @classmethod
+    def normalize_target_colors(cls, target_colors):
+        """Normalize one or many target colors to ``#RRGGBB`` strings."""
+        return segmentation.normalize_target_colors(target_colors)
+
+    @staticmethod
+    def _target_color_rgb(target_colors):
+        """Return the target colors as a normalized RGB array."""
+        return segmentation.target_color_rgb(target_colors)
+
+    @classmethod
+    def _guided_target_color_mask(cls, rgb, target_colors):
+        """Return a conservative mask for pixels close to the target colors."""
+        return segmentation.guided_target_color_mask(rgb, target_colors)
+
+    @classmethod
+    def _guided_target_hue_family_mask(cls, rgb, target_colors):
+        """Return a broader same-hue family mask for the target colors."""
+        return segmentation.guided_target_hue_family_mask(rgb, target_colors)
 
     @staticmethod
     def _light_overlay_colored_mask(rgb):
         """Detect pale but still chromatic pixels on a light background."""
-        rgb = np.asarray(rgb, dtype=float)
-        maxc = rgb.max(axis=-1)
-        minc = rgb.min(axis=-1)
-        saturation = np.divide(
-            maxc - minc, maxc,
-            out=np.zeros_like(maxc, dtype=float), where=maxc > 0)
-        return saturation >= 0.08
+        return segmentation.light_overlay_colored_mask(rgb)
 
     @classmethod
     def _foreground_alpha_mask(cls, arr, threshold=230 * 3,
-                               extraction_mode='standard'):
+                               extraction_mode='standard',
+                               segmentation_mode='auto',
+                               target_colors=None):
         """Return the RGBA-aware foreground mask for the requested mode."""
-        extraction_mode = cls.normalize_extraction_mode(extraction_mode)
-        rgb = arr[..., :-1]
-        alpha = arr[..., -1] > 0
-        if extraction_mode in ['standard', 'dark-ink-light',
-                               'light-ink-dark']:
-            return alpha & (rgb.sum(axis=-1) <= threshold)
-        if extraction_mode == 'light-overlay-white':
-            bright = rgb.sum(axis=-1) > threshold
-            colored = cls._light_overlay_colored_mask(rgb)
-            return alpha & (~bright | colored)
-        return alpha & (rgb.sum(axis=-1) <= threshold)
+        return segmentation.build_foreground(
+            arr, threshold=threshold, extraction_mode=extraction_mode,
+            segmentation_mode=segmentation_mode, target_colors=target_colors)
 
     @classmethod
-    def to_grey_pil(cls, image, threshold=230 * 3, extraction_mode='standard'):
+    def to_grey_pil(cls, image, threshold=230 * 3, extraction_mode='standard',
+                    segmentation_mode='auto', target_colors=None):
         """Convert an image to a greyscale image
 
         Parameters
@@ -1378,14 +1546,17 @@ class DataReader(LabelSelection):
             The greyscale image of integer type"""
         arr = np.asarray(image, dtype=int)
         foreground = cls._foreground_alpha_mask(
-            arr, threshold=threshold, extraction_mode=extraction_mode)
+            arr, threshold=threshold, extraction_mode=extraction_mode,
+            segmentation_mode=segmentation_mode,
+            target_colors=target_colors)
         ret = np.array(image.convert('L'), dtype=int) + 1
         ret[(~foreground) | (ret > 255)] = 0
         return ret
 
     @classmethod
     def to_binary_pil(cls, image, threshold=230 * 3,
-                      extraction_mode='standard'):
+                      extraction_mode='standard', segmentation_mode='auto',
+                      target_colors=None):
         """Convert an image to a binary
 
         Parameters
@@ -1401,7 +1572,9 @@ class DataReader(LabelSelection):
         np.ndarray of ndim 2
             The binary image of integer type"""
         grey = cls.to_grey_pil(
-            image, threshold, extraction_mode=extraction_mode)
+            image, threshold, extraction_mode=extraction_mode,
+            segmentation_mode=segmentation_mode,
+            target_colors=target_colors)
         grey[grey > 0] = 1
         return grey
 
@@ -2013,10 +2186,8 @@ class DataReader(LabelSelection):
             if use_sum:
                 vals[:, i] = np.nansum(binary[:, vmin:vmax], axis=1)
             else:
-                for row in range(len(vals)):
-                    notnull = np.where(binary[row, vmin:vmax])[0]
-                    if len(notnull):
-                        vals[row, i] = notnull.max() + 1
+                vals[:, i] = segmentation.trace_area_profile(
+                    binary[:, vmin:vmax].astype(bool))
 
         # interpolate the values at :attr:`hline_locs`
         if len(self.hline_locs):
@@ -2035,7 +2206,7 @@ class DataReader(LabelSelection):
                                 index=np.arange(len(self.binary)))
 
     def digitize_exaggerated(self, fraction=0.05, absolute=8, inplace=True,
-                             return_mask=False):
+                             return_mask=False, merge_mode=None):
         """Merge the exaggerated values into the original digitized result
 
         Parameters
@@ -2052,6 +2223,9 @@ class DataReader(LabelSelection):
         return_mask: bool
             If True, a boolean 2D array is returned indicating where the
             exaggerations have been used
+        merge_mode: str
+            The merge mode to use. If None, :attr:`exaggeration_merge_mode`
+            is used.
 
         Returns
         -------
@@ -2065,20 +2239,31 @@ class DataReader(LabelSelection):
             used. Otherwise, this is skipped
         """
         if not self.is_exaggerated:
+            if self.exaggerated_reader is None:
+                raise ValueError('No exaggeration reader has been initialized.')
             return self.exaggerated_reader.digitize_exaggerated(
                 fraction=fraction, absolute=absolute, inplace=inplace,
-                return_mask=return_mask)
+                return_mask=return_mask, merge_mode=merge_mode)
+        merge_mode = self.normalize_exaggeration_merge_mode(
+            merge_mode or self.exaggeration_merge_mode)
         if inplace:
             non_exag = self.full_df.values.copy()
         else:
             non_exag = self.full_df.values.copy()
         new_vals = self.digitize(inplace=False).values
 
-        # where we are below 5 percent of the column width, we use the
-        # exaggerated value
-        min_val = fraction * np.diff(self.column_bounds).T
-        min_val[min_val <= absolute] = absolute
-        mask = (non_exag < min_val) & (new_vals > 0)
+        if merge_mode == 'selected-priority':
+            selection_mask = np.zeros_like(new_vals, dtype=bool)
+            bounds = self.column_bounds.astype(int)
+            for i, (start, end) in enumerate(bounds):
+                selection_mask[:, i] = self.binary[:, start:end].any(axis=1)
+            mask = selection_mask & (new_vals > 0)
+        else:
+            # where we are below 5 percent of the column width, we use the
+            # exaggerated value
+            min_val = fraction * np.diff(self.column_bounds).T
+            min_val[min_val <= absolute] = absolute
+            mask = (non_exag < min_val) & (new_vals > 0)
         non_exag[mask] = new_vals[mask]
         non_exag[mask] /= self.is_exaggerated
         if return_mask:
@@ -3591,6 +3776,35 @@ class LineDataReader(DataReader):
     features in the future"""
 
     strat_plot_identifier = 'default'
+
+    @docstrings.get_sections(base='DataReader.digitize')
+    def digitize(self, use_sum=False, inplace=True):
+        """Digitize line plots with a centerline tracing strategy."""
+        binary = self.binary
+        self._get_column_starts()
+        bounds = self.column_bounds
+        vals = np.zeros((binary.shape[0], len(bounds)), dtype=float)
+
+        for i, (vmin, vmax) in enumerate(bounds):
+            section = binary[:, vmin:vmax].astype(bool)
+            centers = segmentation.trace_line_center(section)
+            valid = np.isfinite(centers)
+            vals[valid, i] = centers[valid] + 1.0
+
+        if len(self.hline_locs):
+            from scipy.interpolate import interp1d
+            y = np.arange(len(vals))
+            indices = sorted(set(range(len(vals))).difference(self.hline_locs))
+            data = vals[np.ix_(indices, list(range(vals.shape[1])))]
+            for i in range(vals.shape[1]):
+                vals[:, i] = interp1d(
+                    y[indices], data[:, i], bounds_error=False,
+                    fill_value='extrapolate')(y)
+        if inplace:
+            self.full_df = vals
+        else:
+            return pd.DataFrame(vals, columns=self.columns,
+                                index=np.arange(len(self.binary)))
 
 
 class BarDataReader(DataReader):

@@ -625,6 +625,23 @@ class SelectionToolbar(QToolBar, StraditizerControlBase):
         self.data_obj._update_magni_img()
         self.canvas.draw()
 
+    def prefill_selection_mask(self, mask):
+        """Preselect the given boolean mask in the active selection layer."""
+        obj = self.data_obj
+        if obj._selection_arr is None:
+            return
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape != obj._selection_arr.shape:
+            raise ValueError(
+                "Mask shape %r does not match selection shape %r" % (
+                    mask.shape, obj._selection_arr.shape))
+        arr = obj._orig_selection_arr.copy()
+        arr[mask & (arr != -1)] = obj._select_nlabels + 1
+        obj._selection_arr = arr
+        obj._select_img.set_array(arr)
+        obj._update_magni_img()
+        self.canvas.draw()
+
     def select_everything_to_the_right(self):
         """Selects everything to the right of the current selection"""
         reader = self.data_obj
