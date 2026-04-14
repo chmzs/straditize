@@ -878,8 +878,11 @@ class DataReader(LabelSelection):
             'dims': 'column',
             'long_name': 'Ends of the columns',
             'units': 'px'},
+        'full_data_y': {
+            'long_name': 'Index of the full digitized data',
+            'units': 'px'},
         'full_data': {
-            'dims': ('ydata', 'column'),
+            'dims': ('full_data_y', 'column'),
             'long_name': 'Full digitized data',
             'units': 'px'},
         'hline': {
@@ -1013,6 +1016,8 @@ class DataReader(LabelSelection):
                 if self._column_ends is not None:
                     self.create_variable(ds, 'column_ends', self._column_ends)
                 if self._full_df is not None:
+                    self.create_variable(
+                        ds, 'full_data_y', self._full_df.index.values)
                     self.create_variable(ds, 'full_data', self._full_df.values)
                 if self.hline_locs is not None:
                     self.create_variable(ds, 'hline', self.hline_locs)
@@ -1108,9 +1113,15 @@ class DataReader(LabelSelection):
             if 'column_ends' in ds:
                 reader._column_ends = ds['column_ends'].values
             if 'full_data' in ds:
+                if 'full_data_y' in ds:
+                    full_index = ds['full_data_y'].values
+                else:
+                    # Older datasets reused the reader-image y dimension and
+                    # implicitly stored a simple RangeIndex for full_data.
+                    full_index = np.arange(ds['full_data'].shape[0])
                 reader._full_df = pd.DataFrame(
                     ds['full_data'].values,
-                    index=np.arange(ds['full_data'].shape[0]))
+                    index=full_index)
             if 'hline' in ds:
                 reader.hline_locs = ds['hline'].values
             if 'vline' in ds:
@@ -3898,8 +3909,11 @@ class BarDataReader(DataReader):
             'dims': (),
             'long_name': 'Minimum fraction for overlap estimation'
             },
+        'bars{reader}_full_data_orig_y': {
+            'long_name': 'Index of the full digitized data ignoring bars',
+            'units': 'px'},
         'bars{reader}_full_data_orig': {
-            'dims': ('ydata', 'bars{reader}_column'),
+            'dims': ('bars{reader}_full_data_orig_y', 'bars{reader}_column'),
             'long_name': 'Full digitized data ignoring bars',
             'units': 'px'}
         })
@@ -3935,6 +3949,8 @@ class BarDataReader(DataReader):
         self.create_variable(ds, v('min_fract'), self.min_fract)
 
         if hasattr(self, '_full_df_orig'):
+            self.create_variable(
+                ds, v('full_data_orig_y'), self._full_df_orig.index.values)
             self.create_variable(ds, v('full_data_orig'),
                                  self._full_df_orig.values)
         return ds
@@ -3972,10 +3988,15 @@ class BarDataReader(DataReader):
         if v('max_len') in ds:
             ret.max_len = ds[v('max_len')].values
         if v('full_data_orig') in ds:
+            if v('full_data_orig_y') in ds:
+                full_data_orig_index = ds[v('full_data_orig_y')].values
+            else:
+                full_data_orig_index = np.arange(
+                    ds[v('full_data_orig')].shape[0])
             ret._full_df_orig = pd.DataFrame(
                 ds[v('full_data_orig')].values,
                 columns=ds[v('column')].values,
-                index=np.arange(ds[v('full_data_orig')].shape[0]))
+                index=full_data_orig_index)
 
         return ret
 

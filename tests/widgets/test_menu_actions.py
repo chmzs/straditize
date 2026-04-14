@@ -44,6 +44,22 @@ class MenuActionsTest(bt.StraditizeWidgetsTestCase):
         self.assertFrameEqual(self.reader._full_df_orig,
                               old_reader._full_df_orig)
 
+    def test_save_and_load_edited_full_data_netcdf(self):
+        """NetCDF save/load should preserve edited full-data row counts."""
+        self.init_reader()
+        self.reader.digitize()
+        trimmed = self.reader.full_df.iloc[::3].copy()
+        trimmed.index = np.arange(500, 500 + len(trimmed) * 5, 5)
+        self.reader._full_df = trimmed
+        self.straditizer_widgets.refresh()
+
+        fname = self.get_random_filename(suffix='.nc')
+        self.straditizer_widgets.menu_actions.save_straditizer_as(fname)
+        self.straditizer_widgets.menu_actions.open_straditizer(fname)
+
+        self.assertFrameEqual(
+            self.reader._full_df, trimmed, check_dtype=False)
+
     def test_netcdf_encoding_skips_string_like_variables(self):
         """NetCDF compression should skip object and unicode variables."""
         self.init_reader()

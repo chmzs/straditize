@@ -381,6 +381,31 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
         loaded = binary.DataReader.from_dataset(ds)
         self.assertEqual(loaded.reader_schema_version, 1)
 
+    def test_full_data_roundtrip_with_custom_length_and_index(self):
+        """Serialized full data should not share the reader-image y-dim."""
+        self.reader._get_column_starts()
+        self.reader.digitize()
+
+        trimmed = self.reader.full_df.iloc[::3].copy()
+        trimmed.index = np.arange(1000, 1000 + len(trimmed) * 2, 2)
+        self.reader._full_df = trimmed
+
+        ds = self.reader.to_dataset()
+
+        self.assertEqual(
+            ds['full_data'].dims,
+            ('full_data_y', 'column'))
+        self.assertEqual(
+            ds['full_data_y'].dims,
+            ('full_data_y',))
+        self.assertArrayEquals(
+            ds['full_data_y'].values,
+            trimmed.index.values)
+
+        loaded = binary.DataReader.from_dataset(ds)
+        self.assertFrameEqual(
+            loaded._full_df, trimmed, check_dtype=False)
+
     def test_obstacle_01_alternation_min(self):
         """Test whether the alternation is identified correctly in a minimum"""
         # a looks like
