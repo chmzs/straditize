@@ -2381,6 +2381,7 @@ class DigitizingControl(StraditizerControlBase):
         if not already_present:
             manual_rows.add(row)
         self._full_data_manual_rows[col] = sorted(manual_rows)
+        self._rebuild_full_data_column_from_control_rows(col)
         return True
 
     def _nearest_optional_full_data_mark(self, event):
@@ -2416,7 +2417,43 @@ class DigitizingControl(StraditizerControlBase):
         manual_rows = set(self._full_data_manual_rows.get(col, []))
         manual_rows.discard(mark._full_data_row)
         self._full_data_manual_rows[col] = sorted(manual_rows)
+        self._rebuild_full_data_column_from_control_rows(col)
         return True
+
+    def _set_full_data_column_from_controls(self, col, rows, values):
+        reader = self.reader
+        if reader is None or reader._full_df is None:
+            return
+        series = reader._full_df.loc[:, col]
+        valid = series.dropna()
+        if valid.empty:
+            return
+        rows = np.asarray(rows, dtype=float)
+        values = np.asarray(values, dtype=float)
+        if not len(rows):
+            return
+        order = np.argsort(rows)
+        rows = rows[order]
+        values = values[order]
+        unique_rows, idx = np.unique(rows, return_index=True)
+        rows = unique_rows
+        values = values[idx]
+        target = valid.index.values.astype(float)
+        if len(rows) == 1:
+            new_values = np.full(target.shape, values[0], dtype=float)
+        else:
+            new_values = np.interp(target, rows, values)
+        reader._full_df.loc[valid.index, col] = new_values
+
+    def _rebuild_full_data_column_from_control_rows(self, col):
+        reader = self.reader
+        if reader is None or reader._full_df is None:
+            return
+        rows = self._full_data_control_rows.get(col, [])
+        if not rows:
+            return
+        values = reader._full_df.loc[rows, col].values.astype(float)
+        self._set_full_data_column_from_controls(col, rows, values)
 
     def _update_full_data_from_turning_point(self, old_pos, mark):
         reader = self.reader
@@ -2431,21 +2468,9 @@ class DigitizingControl(StraditizerControlBase):
                  if getattr(m, '_full_data_column', None) == col]
         if not marks:
             return
-        rows = np.asarray([m._full_data_row for m in marks], dtype=float)
-        values = np.asarray([self._full_data_mark_value(m) for m in marks],
-                            dtype=float)
-        order = np.argsort(rows)
-        rows = rows[order]
-        values = values[order]
-        unique_rows, idx = np.unique(rows, return_index=True)
-        rows = unique_rows
-        values = values[idx]
-        target = valid.index.values.astype(float)
-        if len(rows) == 1:
-            new_values = np.full(target.shape, values[0], dtype=float)
-        else:
-            new_values = np.interp(target, rows, values)
-        reader._full_df.loc[valid.index, col] = new_values
+        rows = [m._full_data_row for m in marks]
+        values = [self._full_data_mark_value(m) for m in marks]
+        self._set_full_data_column_from_controls(col, rows, values)
         self._refresh_full_data_editor_and_plot(rebuild_marks=False)
 
     def _refresh_full_data_editor_and_plot(self, rebuild_marks=False):

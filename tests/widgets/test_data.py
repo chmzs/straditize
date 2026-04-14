@@ -269,6 +269,72 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertIn(row, rows)
         editor.close()
 
+    def test_edit_full_data_shift_left_reinterpolates_column_segment(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        selected = None
+        for col in self.reader._full_df.columns:
+            control_rows = sorted(
+                int(m._full_data_row) for m in self.digitizer._full_data_marks
+                if m._full_data_column == col)
+            for prev_row, next_row in zip(control_rows[:-1], control_rows[1:]):
+                if next_row - prev_row >= 4:
+                    row = prev_row + (next_row - prev_row) // 2
+                    neighbor = row + 1 if row + 1 < next_row else row - 1
+                    selected = (col, control_rows, prev_row, row, neighbor,
+                                next_row)
+                    break
+            if selected is not None:
+                break
+
+        self.assertIsNotNone(selected)
+        col, base_rows, prev_row, row, neighbor, next_row = selected
+        _, start_abs, end_abs = self.digitizer._full_data_column_abs_bounds(col)
+        width = float(end_abs - start_abs)
+        base_series = self.reader._full_df.loc[:, col].copy()
+        target_value = 0.0 if float(base_series.loc[row]) > width / 2.0 else width
+
+        add_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=start_abs + target_value,
+            ydata=self.digitizer._full_data_row_y(row),
+            button=MouseButton.LEFT,
+            key='shift')
+        self.digitizer._edit_full_data_from_click(add_event)
+
+        expected_add = np.interp(
+            float(neighbor),
+            np.array([prev_row, row, next_row], dtype=float),
+            np.array([
+                float(base_series.loc[prev_row]),
+                target_value,
+                float(base_series.loc[next_row])], dtype=float))
+        self.assertAlmostEqual(
+            float(self.reader._full_df.loc[neighbor, col]), expected_add)
+
+        mark = next(
+            m for m in self.digitizer._full_data_marks
+            if m._full_data_column == col and int(m._full_data_row) == row)
+        del_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=mark.x,
+            ydata=mark.y,
+            button=MouseButton.RIGHT,
+            key='shift')
+        self.digitizer._edit_full_data_from_click(del_event)
+
+        expected_remove = np.interp(
+            float(neighbor),
+            np.asarray(base_rows, dtype=float),
+            base_series.loc[base_rows].values.astype(float))
+        self.assertAlmostEqual(
+            float(self.reader._full_df.loc[neighbor, col]), expected_remove)
+        editor.close()
+
     def test_edit_full_data_shift_right_removes_manual_control_point(self):
         self.init_reader('basic_diagram_hlines.png')
         self.reader.digitize()
