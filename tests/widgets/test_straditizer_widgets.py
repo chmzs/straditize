@@ -2,6 +2,7 @@
 import _base_testing as bt
 import unittest
 import numpy as np
+from unittest import mock
 
 
 class StraditizerWidgetsTest(bt.StraditizeWidgetsTestCase):
@@ -50,6 +51,16 @@ class StraditizerWidgetsTest(bt.StraditizeWidgetsTestCase):
         self.assertIsNotNone(self.straditizer)
         self.assertEqual(list(self.straditizer.data_xlim), [0, 40])
         self.assertEqual(list(self.straditizer.data_ylim), [0, 40])
+
+    def test_autosave_failure_is_non_fatal(self):
+        self.init_reader()
+        autosaved = list(self.straditizer_widgets.autosaved)
+        with mock.patch.object(
+                self.straditizer, 'to_dataset',
+                side_effect=ValueError('autosave failed')):
+            self.straditizer_widgets.autosave()
+
+        self.assertEqual(self.straditizer_widgets.autosaved, autosaved)
 
 
 if __name__ == '__main__':

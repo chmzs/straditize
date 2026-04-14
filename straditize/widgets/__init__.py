@@ -23,6 +23,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 import os
 import os.path as osp
 from functools import lru_cache
+from warnings import warn
 import six
 from psyplot_gui.compat.qtcompat import (
     QWidget, QtCore, QPushButton, QTreeWidget, QTreeWidgetItem,
@@ -748,8 +749,14 @@ class StraditizerWidgets(QWidget, DockMixin):
 
     def autosave(self):
         """Autosave the current straditizer"""
-        self.autosaved = [self.straditizer.to_dataset().copy(True)] + \
-            self.autosaved[:4]
+        try:
+            dataset = self.straditizer.to_dataset().copy(True)
+        except Exception as exc:
+            warn("Autosave failed and was skipped. Please save the project "
+                 "manually if you want to persist the current state: %s" %
+                 exc)
+            return
+        self.autosaved = [dataset] + self.autosaved[:4]
 
     def reload_autosaved(self):
         """Reload the autosaved straditizer and close the old one"""
