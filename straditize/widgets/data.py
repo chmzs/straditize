@@ -2027,8 +2027,8 @@ class DigitizingControl(StraditizerControlBase):
         mainwindow = get_mainwindow(self.straditizer_widgets)
         editor = mainwindow.new_data_frame_editor(
             reader._full_df,
-            'Full digitized data (pixel) - Drag points / Left click add / '
-            'Right click del')
+            'Full digitized data (pixel) - Drag points / Shift+click point '
+            '/ Left click add row / Right click del row')
         model = editor.table.model()
 
         def refresh_plots(*args, **kwargs):
@@ -2062,13 +2062,14 @@ class DigitizingControl(StraditizerControlBase):
         return editor
 
     def _disconnect_full_data_editor_events(self, *args, **kwargs):
-        self._clear_full_data_marks()
+        self._clear_full_data_marks(clear_state=True)
         fig = getattr(self, '_full_data_click_fig', lambda: None)()
         cid = getattr(self, '_full_data_click_cid', None)
         if fig is not None and cid is not None:
             fig.canvas.mpl_disconnect(cid)
         for attr in ['_full_data_click_fig', '_full_data_click_cid',
-                     '_full_data_editor']:
+                     '_full_data_editor', '_full_data_control_rows',
+                     '_full_data_required_rows']:
             if hasattr(self, attr):
                 delattr(self, attr)
 
@@ -2180,11 +2181,44 @@ class DigitizingControl(StraditizerControlBase):
             rows.extend(seg_rows[keep].tolist())
         return list(unique_everseen(rows))
 
+    def _compute_full_data_required_rows(self, series):
+        valid = series.dropna()
+        if valid.empty:
+            return set()
+        split_locs = np.where(
+            np.diff(valid.index.values.astype(float)) > 1)[0] + 1
+        row_groups = np.split(valid.index.values, split_locs)
+        required = set()
+        for seg_rows in row_groups:
+            if len(seg_rows):
+                required.add(seg_rows[0])
+                required.add(seg_rows[-1])
+        return required
+
+    def _sync_full_data_control_rows(self):
+        reader = self.reader
+        if reader is None or reader._full_df is None:
+            return
+        if not hasattr(self, '_full_data_control_rows'):
+            self._full_data_control_rows = {}
+        if not hasattr(self, '_full_data_required_rows'):
+            self._full_data_required_rows = {}
+        for col in reader._full_df.columns:
+            series = reader._full_df.loc[:, col]
+            valid_rows = set(series.dropna().index.tolist())
+            required = self._compute_full_data_required_rows(series)
+            rows = set(self._full_data_control_rows.get(col, [])) & valid_rows
+            if not rows:
+                rows = set(self._full_data_turning_rows(series))
+            rows |= required
+            self._full_data_control_rows[col] = sorted(rows)
+            self._full_data_required_rows[col] = required
+
     def _full_data_mark_value(self, mark):
         value = float(mark.x) - float(mark._full_data_start_abs)
         return np.clip(value, 0.0, float(mark._full_data_width))
 
-    def _clear_full_data_marks(self):
+    def _clear_full_data_marks(self, clear_state=False):
         for mark in getattr(self, '_full_data_marks', []):
             try:
                 mark.moved.disconnect(self._update_full_data_from_turning_point)
@@ -2196,6 +2230,10 @@ class DigitizingControl(StraditizerControlBase):
                 pass
         if hasattr(self, '_full_data_marks'):
             del self._full_data_marks
+        if clear_state:
+            for attr in ['_full_data_control_rows', '_full_data_required_rows']:
+                if hasattr(self, attr):
+                    delattr(self, attr)
 
     def _create_full_data_turning_point_marks(self):
         from straditize import cross_mark as cm
@@ -2204,10 +2242,11 @@ class DigitizingControl(StraditizerControlBase):
         if reader is None or reader._full_df is None or reader.ax is None:
             return
         self._clear_full_data_marks()
+        self._sync_full_data_control_rows()
         marks = []
         for col in reader._full_df.columns:
             series = reader._full_df.loc[:, col]
-            rows = self._full_data_turning_rows(series)
+            rows = self._full_data_control_rows.get(col, [])
             if not rows:
                 continue
             _, start_abs, end_abs = self._full_data_column_abs_bounds(col)
@@ -2227,9 +2266,88 @@ class DigitizingControl(StraditizerControlBase):
                 mark._full_data_row = row
                 mark._full_data_start_abs = start_abs
                 mark._full_data_width = width
+                mark._full_data_required = (
+                    row in self._full_data_required_rows.get(col, set()))
                 mark.moved.connect(self._update_full_data_from_turning_point)
                 marks.append(mark)
         self._full_data_marks = marks
+
+    @staticmethod
+    def _event_key_tokens(event):
+        key = getattr(event, 'key', None)
+        if not key:
+            return set()
+        if not isinstance(key, six.string_types):
+            key = str(key)
+        return set(filter(None, re.split(r'[\s,+;]+', key.lower())))
+
+    def _is_full_data_control_point_event(self, event):
+        return 'shift' in self._event_key_tokens(event)
+
+    def _full_data_column_from_x(self, x):
+        reader = self.reader
+        x = float(x)
+        x0 = float(reader.extent[0] if reader.extent is not None else 0.0)
+        bounds = np.asarray(reader.all_column_bounds, dtype=float) + x0
+        inside = np.where((x >= bounds[:, 0]) & (x <= bounds[:, 1]))[0]
+        if len(inside):
+            return reader._full_df.columns[int(inside[0])]
+        distances = np.minimum(np.abs(x - bounds[:, 0]), np.abs(x - bounds[:, 1]))
+        return reader._full_df.columns[int(np.argmin(distances))]
+
+    def _nearest_full_data_row(self, col, y):
+        series = self.reader._full_df.loc[:, col].dropna()
+        if series.empty:
+            return None
+        return series.index[nearest_index_position(series.index, y)]
+
+    def _add_full_data_control_point(self, event):
+        reader = self.reader
+        if (reader is None or reader._full_df is None or event.inaxes is not reader.ax or
+                event.xdata is None or event.ydata is None):
+            return False
+        col = self._full_data_column_from_x(event.xdata)
+        row = self._nearest_full_data_row(col, self._event_to_full_data_y(event))
+        if row is None:
+            return False
+        _, start_abs, end_abs = self._full_data_column_abs_bounds(col)
+        value = np.clip(float(event.xdata) - start_abs, 0.0, end_abs - start_abs)
+        reader._full_df.loc[row, col] = value
+        self._sync_full_data_control_rows()
+        rows = set(self._full_data_control_rows.get(col, []))
+        rows.add(row)
+        rows |= self._full_data_required_rows.get(col, set())
+        self._full_data_control_rows[col] = sorted(rows)
+        return True
+
+    def _nearest_optional_full_data_mark(self, event):
+        marks = [
+            m for m in getattr(self, '_full_data_marks', [])
+            if not getattr(m, '_full_data_required', False)]
+        if not marks or event.xdata is None or event.ydata is None:
+            return None
+        x = float(event.xdata)
+        y = float(event.ydata)
+        xspan = max(abs(np.diff(self.reader.ax.get_xlim())[0]), 1.0)
+        yspan = max(abs(np.diff(self.reader.ax.get_ylim())[0]), 1.0)
+        distances = [
+            np.hypot((m.x - x) / xspan, (m.y - y) / yspan)
+            for m in marks]
+        idx = int(np.argmin(distances))
+        if distances[idx] > 0.08:
+            return None
+        return marks[idx]
+
+    def _remove_full_data_control_point(self, event):
+        mark = self._nearest_optional_full_data_mark(event)
+        if mark is None:
+            return False
+        col = mark._full_data_column
+        rows = set(self._full_data_control_rows.get(col, []))
+        rows.discard(mark._full_data_row)
+        rows |= self._full_data_required_rows.get(col, set())
+        self._full_data_control_rows[col] = sorted(rows)
+        return True
 
     def _update_full_data_from_turning_point(self, old_pos, mark):
         reader = self.reader
@@ -2320,11 +2438,17 @@ class DigitizingControl(StraditizerControlBase):
                 get_toolbar_mode(reader.ax.figure) != ''):
             return
 
-        y = self._event_to_full_data_y(event)
-        if self._is_left_click(event.button):
-            changed = self._add_full_data_row(y)
+        if self._is_full_data_control_point_event(event):
+            if self._is_left_click(event.button):
+                changed = self._add_full_data_control_point(event)
+            else:
+                changed = self._remove_full_data_control_point(event)
         else:
-            changed = self._remove_nearest_full_data_row(y)
+            y = self._event_to_full_data_y(event)
+            if self._is_left_click(event.button):
+                changed = self._add_full_data_row(y)
+            else:
+                changed = self._remove_nearest_full_data_row(y)
         if changed:
             self._refresh_full_data_editor_and_plot(rebuild_marks=True)
 

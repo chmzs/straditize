@@ -173,6 +173,74 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertNotEqual(float(self.reader._full_df.loc[row, col]), old)
         editor.close()
 
+    def test_edit_full_data_shift_left_adds_manual_control_point(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        col = self.reader._full_df.columns[0]
+        existing_rows = {
+            m._full_data_row for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        row = next(r for r in self.reader._full_df.index if r not in existing_rows)
+        _, start_abs, _ = self.digitizer._full_data_column_abs_bounds(col)
+        old = float(self.reader._full_df.loc[row, col])
+        add_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=start_abs + old + 1.0,
+            ydata=float(row) + min(self.reader.extent[2:]),
+            button=MouseButton.LEFT,
+            key='shift')
+
+        self.digitizer._edit_full_data_from_click(add_event)
+
+        rows = {
+            m._full_data_row for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        self.assertIn(row, rows)
+        self.assertNotEqual(float(self.reader._full_df.loc[row, col]), old)
+        editor.close()
+
+    def test_edit_full_data_shift_right_removes_manual_control_point(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        col = self.reader._full_df.columns[0]
+        existing_rows = {
+            m._full_data_row for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        row = next(r for r in self.reader._full_df.index if r not in existing_rows)
+        _, start_abs, _ = self.digitizer._full_data_column_abs_bounds(col)
+        add_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=start_abs + float(self.reader._full_df.loc[row, col]) + 1.0,
+            ydata=float(row) + min(self.reader.extent[2:]),
+            button=MouseButton.LEFT,
+            key='shift')
+        self.digitizer._edit_full_data_from_click(add_event)
+        mark = next(
+            m for m in self.digitizer._full_data_marks
+            if m._full_data_column == col and m._full_data_row == row)
+
+        del_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=mark.x,
+            ydata=mark.y,
+            button=MouseButton.RIGHT,
+            key='shift')
+        self.digitizer._edit_full_data_from_click(del_event)
+
+        rows = {
+            m._full_data_row for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        self.assertNotIn(row, rows)
+        editor.close()
+
     def test_remove_disconnected_01_from0(self):
         """Test the removing of disconnected features
 
