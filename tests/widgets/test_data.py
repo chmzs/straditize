@@ -155,6 +155,24 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertNotIn(int(np.round(low_y)), self.reader._full_df.index)
         editor.close()
 
+    def test_edit_full_data_turning_point_mark_updates_full_df(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+        self.assertTrue(getattr(self.digitizer, '_full_data_marks', []))
+
+        mark = self.digitizer._full_data_marks[0]
+        col = mark._full_data_column
+        row = mark._full_data_row
+        old = float(self.reader._full_df.loc[row, col])
+
+        self.move_mark(mark, to=(mark.x + 1.0, mark.y))
+
+        self.assertNotEqual(float(self.reader._full_df.loc[row, col]), old)
+        editor.close()
+
     def test_remove_disconnected_01_from0(self):
         """Test the removing of disconnected features
 

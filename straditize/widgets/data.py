@@ -678,7 +678,7 @@ class DigitizingControl(StraditizerControlBase):
             'Modify and edit the samples')
         self.btn_edit_full_data = QPushButton('Edit full data')
         self.btn_edit_full_data.setToolTip(
-            'Edit the full digitized data table directly')
+            'Edit the full digitized data table and drag turning points')
         self.btn_reset_samples = QPushButton('Reset')
         self.btn_reset_samples.setToolTip('Reset the samples')
 
@@ -2014,7 +2014,9 @@ class DigitizingControl(StraditizerControlBase):
         """Open an interactive editor for the full digitized data.
 
         Left click in the reader axes adds a row at the clicked y-position.
-        Right click removes the nearest existing row.
+        Right click removes the nearest existing row. Turning-point marks on
+        the plotted full data can be dragged horizontally to reshape the
+        digitized profile.
         """
         from straditize.widgets import get_mainwindow
 
@@ -2025,7 +2027,8 @@ class DigitizingControl(StraditizerControlBase):
         mainwindow = get_mainwindow(self.straditizer_widgets)
         editor = mainwindow.new_data_frame_editor(
             reader._full_df,
-            'Full digitized data (pixel) - Left click add / Right click del')
+            'Full digitized data (pixel) - Drag points / Left click add / '
+            'Right click del')
         model = editor.table.model()
 
         def refresh_plots(*args, **kwargs):
@@ -2050,6 +2053,7 @@ class DigitizingControl(StraditizerControlBase):
         self._full_data_click_fig = weakref.ref(reader.ax.figure)
         self._full_data_click_cid = reader.ax.figure.canvas.mpl_connect(
             'button_press_event', self._edit_full_data_from_click)
+        self._create_full_data_turning_point_marks()
         try:
             editor.destroyed.connect(self._disconnect_full_data_editor_events)
         except AttributeError:
@@ -2058,6 +2062,7 @@ class DigitizingControl(StraditizerControlBase):
         return editor
 
     def _disconnect_full_data_editor_events(self, *args, **kwargs):
+        self._clear_full_data_marks()
         fig = getattr(self, '_full_data_click_fig', lambda: None)()
         cid = getattr(self, '_full_data_click_cid', None)
         if fig is not None and cid is not None:
@@ -2108,7 +2113,155 @@ class DigitizingControl(StraditizerControlBase):
         df.drop(df.index[idx], inplace=True)
         return True
 
-    def _refresh_full_data_editor_and_plot(self):
+    def _full_data_row_y(self, row):
+        reader = self.reader
+        y0 = 0.0
+        if reader.extent is not None:
+            y0 = float(min(reader.extent[2:]))
+        return float(row) + 0.5 + y0
+
+    def _full_data_column_abs_bounds(self, col):
+        reader = self.reader
+        df = reader._full_df
+        col_pos = list(df.columns).index(col)
+        starts = np.asarray(reader.all_column_starts, dtype=float)
+        ends = np.asarray(reader.all_column_ends, dtype=float)
+        x0 = float(reader.extent[0] if reader.extent is not None else 0.0)
+        return (col_pos, starts[col_pos] + x0, ends[col_pos] + x0)
+
+    @staticmethod
+    def _rdp_point_indices(x, y, epsilon):
+        if len(x) <= 2:
+            return [0, len(x) - 1] if len(x) else []
+
+        start = np.array([x[0], y[0]], dtype=float)
+        end = np.array([x[-1], y[-1]], dtype=float)
+        vec = end - start
+        norm = np.hypot(vec[0], vec[1])
+        if norm == 0:
+            dists = np.hypot(x[1:-1] - start[0], y[1:-1] - start[1])
+        else:
+            pts = np.column_stack([x[1:-1], y[1:-1]])
+            rel = pts - start
+            dists = np.abs(vec[0] * rel[:, 1] - vec[1] * rel[:, 0]) / norm
+        if not len(dists):
+            return [0, len(x) - 1]
+        imax = int(np.argmax(dists))
+        if dists[imax] <= epsilon:
+            return [0, len(x) - 1]
+        split = imax + 1
+        left = DigitizingControl._rdp_point_indices(
+            x[:split + 1], y[:split + 1], epsilon)
+        right = DigitizingControl._rdp_point_indices(
+            x[split:], y[split:], epsilon)
+        return left[:-1] + [i + split for i in right]
+
+    def _full_data_turning_rows(self, series, epsilon=1.0, max_points=24):
+        valid = series.dropna()
+        if valid.empty:
+            return []
+        index = valid.index.values.astype(float)
+        values = valid.values.astype(float)
+        split_locs = np.where(np.diff(index) > 1)[0] + 1
+        row_groups = np.split(valid.index.values, split_locs)
+        value_groups = np.split(values, split_locs)
+        rows = []
+        for seg_rows, seg_vals in zip(row_groups, value_groups):
+            if len(seg_rows) <= 2:
+                rows.extend(seg_rows.tolist())
+                continue
+            seg_x = np.asarray(seg_rows, dtype=float)
+            seg_y = np.asarray(seg_vals, dtype=float)
+            tol = float(epsilon)
+            keep = self._rdp_point_indices(seg_x, seg_y, tol)
+            while len(keep) > max_points:
+                tol *= 1.5
+                keep = self._rdp_point_indices(seg_x, seg_y, tol)
+            rows.extend(seg_rows[keep].tolist())
+        return list(unique_everseen(rows))
+
+    def _full_data_mark_value(self, mark):
+        value = float(mark.x) - float(mark._full_data_start_abs)
+        return np.clip(value, 0.0, float(mark._full_data_width))
+
+    def _clear_full_data_marks(self):
+        for mark in getattr(self, '_full_data_marks', []):
+            try:
+                mark.moved.disconnect(self._update_full_data_from_turning_point)
+            except Exception:
+                pass
+            try:
+                mark.remove()
+            except Exception:
+                pass
+        if hasattr(self, '_full_data_marks'):
+            del self._full_data_marks
+
+    def _create_full_data_turning_point_marks(self):
+        from straditize import cross_mark as cm
+
+        reader = self.reader
+        if reader is None or reader._full_df is None or reader.ax is None:
+            return
+        self._clear_full_data_marks()
+        marks = []
+        for col in reader._full_df.columns:
+            series = reader._full_df.loc[:, col]
+            rows = self._full_data_turning_rows(series)
+            if not rows:
+                continue
+            _, start_abs, end_abs = self._full_data_column_abs_bounds(col)
+            width = max(float(end_abs - start_abs), 0.0)
+            for row in rows:
+                value = series.loc[row]
+                if np.isnan(value):
+                    continue
+                mark = cm.CrossMarks(
+                    (start_abs + float(value), self._full_data_row_y(row)),
+                    ax=reader.ax, selectable=['v'], draggable=['v'],
+                    xlim=(start_abs, end_abs), ylim=reader.ax.get_ylim(),
+                    select_props={'c': 'r'}, hide_horizontal=True,
+                    auto_hide=False, lock=False, zorder=5, marker='o',
+                    markersize=5, linewidth=1.0, c='tab:cyan')
+                mark._full_data_column = col
+                mark._full_data_row = row
+                mark._full_data_start_abs = start_abs
+                mark._full_data_width = width
+                mark.moved.connect(self._update_full_data_from_turning_point)
+                marks.append(mark)
+        self._full_data_marks = marks
+
+    def _update_full_data_from_turning_point(self, old_pos, mark):
+        reader = self.reader
+        if reader is None or reader._full_df is None:
+            return
+        col = mark._full_data_column
+        series = reader._full_df.loc[:, col].copy()
+        valid = series.dropna()
+        if valid.empty:
+            return
+        marks = [m for m in getattr(self, '_full_data_marks', [])
+                 if getattr(m, '_full_data_column', None) == col]
+        if not marks:
+            return
+        rows = np.asarray([m._full_data_row for m in marks], dtype=float)
+        values = np.asarray([self._full_data_mark_value(m) for m in marks],
+                            dtype=float)
+        order = np.argsort(rows)
+        rows = rows[order]
+        values = values[order]
+        unique_rows, idx = np.unique(rows, return_index=True)
+        rows = unique_rows
+        values = values[idx]
+        target = valid.index.values.astype(float)
+        if len(rows) == 1:
+            new_values = np.full(target.shape, values[0], dtype=float)
+        else:
+            new_values = np.interp(target, rows, values)
+        reader._full_df.loc[valid.index, col] = new_values
+        self._refresh_full_data_editor_and_plot(rebuild_marks=False)
+
+    def _refresh_full_data_editor_and_plot(self, rebuild_marks=False):
         editor = getattr(self, '_full_data_editor', None)
         if editor is not None:
             try:
@@ -2121,6 +2274,8 @@ class DigitizingControl(StraditizerControlBase):
                 pc.remove_full_df_plot()
             pc.plot_full_df()
             pc.refresh()
+        if rebuild_marks:
+            self._create_full_data_turning_point_marks()
         self.straditizer.draw_figure()
 
     @staticmethod
@@ -2171,7 +2326,7 @@ class DigitizingControl(StraditizerControlBase):
         else:
             changed = self._remove_nearest_full_data_row(y)
         if changed:
-            self._refresh_full_data_editor_and_plot()
+            self._refresh_full_data_editor_and_plot(rebuild_marks=True)
 
     def _update_samples(self):
         if self._draw_sep:
