@@ -56,6 +56,26 @@ class SegmentationTest(unittest.TestCase):
         self.assertTrue(np.isfinite(centers[4:16]).all())
         self.assertLess(np.nanmax(np.abs(np.diff(centers[4:16]))), 4.0)
 
+    def test_trace_bar_profile_ignores_isolated_full_width_row(self):
+        section = np.zeros((10, 12), dtype=bool)
+        section[2:8, :3] = True
+        section[5, :] = True
+
+        values = segmentation.trace_bar_profile(section)
+
+        np.testing.assert_array_equal(
+            values, np.array([0, 0, 3, 3, 3, 3, 3, 3, 0, 0], dtype=float))
+
+    def test_trace_bar_profile_bridges_single_missing_row(self):
+        section = np.zeros((10, 8), dtype=bool)
+        section[2:8, :3] = True
+        section[5, :3] = False
+
+        values = segmentation.trace_bar_profile(section)
+
+        np.testing.assert_array_equal(
+            values, np.array([0, 0, 3, 3, 3, 3, 3, 3, 0, 0], dtype=float))
+
     def test_build_foreground_large_image_perf_under_4s(self):
         arr = np.full((1800, 1200, 4), 255, dtype=np.uint8)
         arr[..., -1] = 255

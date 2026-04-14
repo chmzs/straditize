@@ -4048,6 +4048,40 @@ class BarDataReader(DataReader):
                         not_inserted += 1
                 inserted += nbars - 1 - not_inserted
 
+        def merge_unimodal_neighbors():
+            def is_unimodal(values):
+                diff = np.diff(values)
+                if not len(diff):
+                    return True
+                trend = np.sign(diff)
+                trend[np.abs(diff) <= self.tolerance] = 0
+                trend = trend[trend != 0]
+                if not len(trend):
+                    return True
+                seen_negative = False
+                for value in trend:
+                    if value < 0:
+                        seen_negative = True
+                    elif seen_negative:
+                        return False
+                return True
+
+            merged = True
+            while merged and len(all_indices) > 1:
+                merged = False
+                for i in range(len(all_indices) - 1):
+                    current = all_indices[i]
+                    nxt = all_indices[i + 1]
+                    if current[1] != nxt[0]:
+                        continue
+                    values = arr[current[0]:nxt[1]]
+                    if not is_unimodal(values):
+                        continue
+                    all_indices[i:i + 2] = [[current[0], nxt[1]]]
+                    heights[i:i + 2] = [np.nanmax(values)]
+                    merged = True
+                    break
+
         all_indices = []
         heights = []
         try:
@@ -4082,6 +4116,9 @@ class BarDataReader(DataReader):
             last_val = value
             if state:
                 last_state = state
+        # Merge adjacent monotonic edge fragments back into one bar so
+        # anti-aliased or tapered endpoints remain attached to the main bar.
+        merge_unimodal_neighbors()
         # now we remove those indices, where we are way too short
         if self.min_len is not None:
             remove_too_short(self.min_len)
@@ -4107,7 +4144,26 @@ class BarDataReader(DataReader):
         %(BarDataReader.get_bars.parameters.do_split)s
         %(DataReader.digitize.parameters.inplace)s
         """
-        df = super(BarDataReader, self).digitize(inplace=False)
+        binary = self.binary
+        self._get_column_starts()
+        bounds = self.column_bounds
+        vals = np.zeros((binary.shape[0], len(bounds)), dtype=float)
+
+        for i, (vmin, vmax) in enumerate(bounds):
+            vals[:, i] = segmentation.trace_bar_profile(
+                binary[:, vmin:vmax].astype(bool))
+
+        if len(self.hline_locs):
+            from scipy.interpolate import interp1d
+            y = np.arange(len(vals))
+            indices = sorted(set(range(len(vals))).difference(self.hline_locs))
+            data = vals[np.ix_(indices, list(range(vals.shape[1])))]
+            for i in range(vals.shape[1]):
+                vals[:, i] = interp1d(
+                    y[indices], data[:, i], bounds_error=False,
+                    fill_value='extrapolate')(y)
+        df = pd.DataFrame(vals, columns=self.columns,
+                          index=np.arange(len(self.binary)))
         # now we only keep those values that are the same as their surroundings
         if inplace:
             self._full_df_orig = df.copy(True)

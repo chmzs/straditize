@@ -732,6 +732,20 @@ class DataReaderTest(unittest.TestCase, AlmostArrayEqualMixin):
         self.assertEqual(len(artists['fills']), 2)
         self.assertEqual(len(artists['lines']), 2)
 
+    def test_bar_reader_keeps_tapered_endcaps_in_single_bar(self):
+        """Bar endpoint ramps should stay attached to one detected bar."""
+        reader = binary.BarDataReader(
+            np.ones((12, 2), dtype=np.int8), plot=False, extent=[0, 2, 12, 0])
+        reader.tolerance = 1
+
+        arr = np.array([0, 0, 1, 2, 4, 4, 4, 4, 2, 1, 0, 0], dtype=float)
+
+        indices, heights, splitted = reader.get_bars(arr)
+
+        self.assertEqual(indices, [[2, 10]])
+        self.assertEqual(heights, [4.0])
+        self.assertEqual(splitted, [])
+
 
 if __name__ == '__main__':
     unittest.main()

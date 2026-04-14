@@ -372,6 +372,73 @@ def trace_area_profile(section_mask):
     return values
 
 
+def trace_bar_profile(section_mask, boundary_pad=1, closing_width=3,
+                      max_gap=1):
+    """Trace a bar profile while preferring the left-anchored foreground.
+
+    Unlike generic area tracing, bars are expected to grow from the column
+    start. We therefore prefer the component attached to the left side,
+    suppress isolated full-width rows caused by horizontal guide lines, and
+    bridge tiny single-row dropouts in low-resolution scans.
+    """
+    section_mask = np.asarray(section_mask, dtype=bool)
+    if not section_mask.any():
+        return np.zeros(section_mask.shape[0], dtype=float)
+
+    cleaned = skim.closing(
+        section_mask, footprint=np.ones((1, max(1, int(closing_width))),
+                                        dtype=bool))
+    values = np.zeros(cleaned.shape[0], dtype=float)
+    prev_end = None
+
+    def iter_runs(row_mask):
+        xs = np.where(row_mask)[0]
+        if not len(xs):
+            return []
+        splits = np.where(np.diff(xs) > 1)[0] + 1
+        groups = np.split(xs, splits)
+        return [(int(group[0]), int(group[-1]) + 1) for group in groups]
+
+    def choose_run(runs):
+        anchored = [run for run in runs if run[0] <= boundary_pad]
+        candidates = anchored or runs
+        if prev_end is None:
+            return min(candidates, key=lambda run: (run[0], -(run[1] - run[0])))
+        return min(
+            candidates,
+            key=lambda run: (run[0] > boundary_pad,
+                             abs(run[1] - prev_end),
+                             run[0], -(run[1] - run[0])))
+
+    for row in range(cleaned.shape[0]):
+        runs = iter_runs(cleaned[row])
+        if not runs:
+            prev_end = None
+            continue
+        start, end = choose_run(runs)
+        values[row] = end
+        prev_end = end
+
+    col_width = float(cleaned.shape[1])
+    suspect_threshold = max(col_width - 1.0, col_width * 0.9)
+    min_jump = max(2.0, col_width * 0.25)
+    for row, value in enumerate(values):
+        if value < suspect_threshold:
+            continue
+        neigh = values[max(0, row - 1):row].tolist() + \
+            values[row + 1:min(len(values), row + 2)].tolist()
+        neigh = np.asarray([v for v in neigh if v > 0], dtype=float)
+        if not len(neigh):
+            continue
+        if value - np.nanmedian(neigh) >= min_jump:
+            values[row] = np.nan
+
+    values[values == 0] = np.nan
+    values = _fill_short_gaps(values, max_gap=max_gap)
+    values[~np.isfinite(values)] = 0.0
+    return values
+
+
 def _fill_short_gaps(values, max_gap=4):
     values = np.asarray(values, dtype=float).copy()
     valid = np.where(np.isfinite(values))[0]
