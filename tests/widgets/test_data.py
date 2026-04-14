@@ -155,6 +155,42 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertNotIn(int(np.round(low_y)), self.reader._full_df.index)
         editor.close()
 
+    def test_edit_full_data_click_add_row_uses_visual_row_center(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        target_row = int(self.reader._full_df.index[9])
+        self.reader._full_df.drop(target_row, inplace=True)
+
+        add_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            ydata=self.digitizer._full_data_row_y(target_row),
+            button=MouseButton.LEFT)
+        self.digitizer._edit_full_data_from_click(add_event)
+
+        self.assertIn(target_row, self.reader._full_df.index)
+        editor.close()
+
+    def test_edit_full_data_click_remove_row_uses_visual_row_center(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        target_row = int(self.reader._full_df.index[9])
+        del_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            ydata=self.digitizer._full_data_row_y(target_row),
+            button=MouseButton.RIGHT)
+        self.digitizer._edit_full_data_from_click(del_event)
+
+        self.assertNotIn(target_row, self.reader._full_df.index)
+        editor.close()
+
     def test_edit_full_data_turning_point_mark_updates_full_df(self):
         self.init_reader('basic_diagram_hlines.png')
         self.reader.digitize()
@@ -201,6 +237,36 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
             if m._full_data_column == col}
         self.assertIn(row, rows)
         self.assertNotEqual(float(self.reader._full_df.loc[row, col]), old)
+        editor.close()
+
+    def test_edit_full_data_shift_left_adds_control_point_on_visual_row(self):
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        col = self.reader._full_df.columns[0]
+        existing_rows = {
+            int(m._full_data_row) for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        row = next(
+            int(r) for r in self.reader._full_df.index
+            if r not in existing_rows and int(r) % 2 == 1)
+        _, start_abs, _ = self.digitizer._full_data_column_abs_bounds(col)
+
+        add_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=start_abs + float(self.reader._full_df.loc[row, col]) + 1.0,
+            ydata=self.digitizer._full_data_row_y(row),
+            button=MouseButton.LEFT,
+            key='shift')
+        self.digitizer._edit_full_data_from_click(add_event)
+
+        rows = {
+            int(m._full_data_row) for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        self.assertIn(row, rows)
         editor.close()
 
     def test_edit_full_data_shift_right_removes_manual_control_point(self):

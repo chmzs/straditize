@@ -2492,7 +2492,9 @@ class DigitizingControl(StraditizerControlBase):
             ylim = getattr(self.straditizer, 'data_ylim', None)
             if ylim is not None:
                 y -= float(min(ylim))
-        return y
+        # Full-data rows are plotted at row centers (row + 0.5), so convert
+        # mouse picks back to the underlying index before nearest-row lookup.
+        return y - 0.5
 
     def _edit_full_data_from_click(self, event):
         from straditize.straditizer import get_toolbar_mode
