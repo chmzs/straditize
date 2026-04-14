@@ -241,6 +241,49 @@ class RemoverTest(bt.StraditizeWidgetsTestCase):
         self.assertNotIn(row, rows)
         editor.close()
 
+    def test_edit_full_data_control_points_use_distinct_colors(self):
+        from matplotlib.colors import to_hex
+
+        self.init_reader('basic_diagram_hlines.png')
+        self.reader.digitize()
+        self.straditizer_widgets.refresh()
+        editor = self.digitizer.edit_full_data()
+        self.assertIsNotNone(editor)
+
+        required_mark = next(
+            m for m in self.digitizer._full_data_marks
+            if m._full_data_required)
+        auto_mark = next(
+            m for m in self.digitizer._full_data_marks
+            if not m._full_data_required and not getattr(
+                m, '_full_data_manual', False))
+
+        col = self.reader._full_df.columns[0]
+        existing_rows = {
+            m._full_data_row for m in self.digitizer._full_data_marks
+            if m._full_data_column == col}
+        row = next(r for r in self.reader._full_df.index if r not in existing_rows)
+        _, start_abs, _ = self.digitizer._full_data_column_abs_bounds(col)
+        add_event = SimpleNamespace(
+            inaxes=self.reader.ax,
+            xdata=start_abs + float(self.reader._full_df.loc[row, col]) + 1.0,
+            ydata=float(row) + min(self.reader.extent[2:]),
+            button=MouseButton.LEFT,
+            key='shift')
+        self.digitizer._edit_full_data_from_click(add_event)
+        manual_mark = next(
+            m for m in self.digitizer._full_data_marks
+            if m._full_data_column == col and m._full_data_row == row)
+
+        required_color = to_hex(required_mark._full_data_base_color)
+        auto_color = to_hex(auto_mark._full_data_base_color)
+        manual_color = to_hex(manual_mark._full_data_base_color)
+
+        self.assertNotEqual(required_color, auto_color)
+        self.assertNotEqual(required_color, manual_color)
+        self.assertNotEqual(auto_color, manual_color)
+        editor.close()
+
     def test_remove_disconnected_01_from0(self):
         """Test the removing of disconnected features
 

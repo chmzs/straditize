@@ -57,6 +57,13 @@ else:
 reader_types = ['area', 'bars', 'rounded bars', 'stacked area',
                 'line']
 
+full_data_mark_palette = {
+    'required': '#ff9f1c',
+    'auto': '#00bcd4',
+    'manual': '#d81b60',
+    'selected': '#e53935',
+}
+
 extraction_mode_items = [
     ('Standard', 'standard'),
     ('Light overlay on white background', 'light-overlay-white'),
@@ -2203,16 +2210,27 @@ class DigitizingControl(StraditizerControlBase):
             self._full_data_control_rows = {}
         if not hasattr(self, '_full_data_required_rows'):
             self._full_data_required_rows = {}
+        if not hasattr(self, '_full_data_auto_rows'):
+            self._full_data_auto_rows = {}
+        if not hasattr(self, '_full_data_manual_rows'):
+            self._full_data_manual_rows = {}
         for col in reader._full_df.columns:
             series = reader._full_df.loc[:, col]
             valid_rows = set(series.dropna().index.tolist())
             required = self._compute_full_data_required_rows(series)
             rows = set(self._full_data_control_rows.get(col, [])) & valid_rows
+            auto_rows = set(self._full_data_auto_rows.get(col, [])) & valid_rows
+            manual_rows = set(
+                self._full_data_manual_rows.get(col, [])) & valid_rows
             if not rows:
-                rows = set(self._full_data_turning_rows(series))
+                auto_rows = set(self._full_data_turning_rows(series))
+                rows = set(auto_rows)
+            auto_rows |= rows - manual_rows - required
             rows |= required
             self._full_data_control_rows[col] = sorted(rows)
             self._full_data_required_rows[col] = required
+            self._full_data_auto_rows[col] = sorted(auto_rows & rows)
+            self._full_data_manual_rows[col] = sorted(manual_rows & rows)
 
     def _full_data_mark_value(self, mark):
         value = float(mark.x) - float(mark._full_data_start_abs)
@@ -2231,9 +2249,33 @@ class DigitizingControl(StraditizerControlBase):
         if hasattr(self, '_full_data_marks'):
             del self._full_data_marks
         if clear_state:
-            for attr in ['_full_data_control_rows', '_full_data_required_rows']:
+            for attr in ['_full_data_control_rows', '_full_data_required_rows',
+                         '_full_data_auto_rows', '_full_data_manual_rows']:
                 if hasattr(self, attr):
                     delattr(self, attr)
+
+    def _full_data_mark_visual_style(self, required=False, manual=False):
+        if manual:
+            color = full_data_mark_palette['manual']
+        elif required:
+            color = full_data_mark_palette['required']
+        else:
+            color = full_data_mark_palette['auto']
+        return {
+            'base_color': color,
+            'guide_alpha': 0.45,
+            'guide_lw': 1.2,
+            'markerfacecolor': color,
+            'markeredgecolor': '#ffffff',
+            'markeredgewidth': 1.3,
+            'markersize': 7.5 if manual else 6.5,
+            'select_props': {
+                'color': full_data_mark_palette['selected'],
+                'markerfacecolor': full_data_mark_palette['selected'],
+                'markeredgecolor': '#111111',
+                'markersize': 8.5 if manual else 7.5,
+            },
+        }
 
     def _create_full_data_turning_point_marks(self):
         from straditize import cross_mark as cm
@@ -2251,23 +2293,39 @@ class DigitizingControl(StraditizerControlBase):
                 continue
             _, start_abs, end_abs = self._full_data_column_abs_bounds(col)
             width = max(float(end_abs - start_abs), 0.0)
+            required_rows = set(self._full_data_required_rows.get(col, []))
+            manual_rows = set(self._full_data_manual_rows.get(col, []))
             for row in rows:
                 value = series.loc[row]
                 if np.isnan(value):
                     continue
+                required = row in required_rows
+                manual = row in manual_rows
+                style = self._full_data_mark_visual_style(
+                    required=required, manual=manual)
                 mark = cm.CrossMarks(
                     (start_abs + float(value), self._full_data_row_y(row)),
                     ax=reader.ax, selectable=['v'], draggable=['v'],
                     xlim=(start_abs, end_abs), ylim=reader.ax.get_ylim(),
-                    select_props={'c': 'r'}, hide_horizontal=True,
+                    select_props=style['select_props'], hide_horizontal=False,
                     auto_hide=False, lock=False, zorder=5, marker='o',
-                    markersize=5, linewidth=1.0, c='tab:cyan')
+                    linewidth=0.0, color=style['base_color'],
+                    markerfacecolor=style['markerfacecolor'],
+                    markeredgecolor=style['markeredgecolor'],
+                    markeredgewidth=style['markeredgewidth'],
+                    markersize=style['markersize'])
                 mark._full_data_column = col
                 mark._full_data_row = row
                 mark._full_data_start_abs = start_abs
                 mark._full_data_width = width
-                mark._full_data_required = (
-                    row in self._full_data_required_rows.get(col, set()))
+                mark._full_data_required = required
+                mark._full_data_manual = manual
+                mark._full_data_base_color = style['base_color']
+                mark.hline.set_linewidth(0.0)
+                mark.hline.set_alpha(1.0)
+                mark.vline.set_linewidth(style['guide_lw'])
+                mark.vline.set_alpha(style['guide_alpha'])
+                mark.vline.set_color(style['base_color'])
                 mark.moved.connect(self._update_full_data_from_turning_point)
                 marks.append(mark)
         self._full_data_marks = marks
@@ -2310,6 +2368,7 @@ class DigitizingControl(StraditizerControlBase):
         row = self._nearest_full_data_row(col, self._event_to_full_data_y(event))
         if row is None:
             return False
+        already_present = row in set(self._full_data_control_rows.get(col, []))
         _, start_abs, end_abs = self._full_data_column_abs_bounds(col)
         value = np.clip(float(event.xdata) - start_abs, 0.0, end_abs - start_abs)
         reader._full_df.loc[row, col] = value
@@ -2318,6 +2377,10 @@ class DigitizingControl(StraditizerControlBase):
         rows.add(row)
         rows |= self._full_data_required_rows.get(col, set())
         self._full_data_control_rows[col] = sorted(rows)
+        manual_rows = set(self._full_data_manual_rows.get(col, []))
+        if not already_present:
+            manual_rows.add(row)
+        self._full_data_manual_rows[col] = sorted(manual_rows)
         return True
 
     def _nearest_optional_full_data_mark(self, event):
@@ -2347,6 +2410,12 @@ class DigitizingControl(StraditizerControlBase):
         rows.discard(mark._full_data_row)
         rows |= self._full_data_required_rows.get(col, set())
         self._full_data_control_rows[col] = sorted(rows)
+        auto_rows = set(self._full_data_auto_rows.get(col, []))
+        auto_rows.discard(mark._full_data_row)
+        self._full_data_auto_rows[col] = sorted(auto_rows)
+        manual_rows = set(self._full_data_manual_rows.get(col, []))
+        manual_rows.discard(mark._full_data_row)
+        self._full_data_manual_rows[col] = sorted(manual_rows)
         return True
 
     def _update_full_data_from_turning_point(self, old_pos, mark):
